@@ -12,7 +12,7 @@ There is intentionally no generic "run any anka command" tool.
 | Backend    | Enabled when                                              | Tools |
 | ---------- | --------------------------------------------------------- | ----- |
 | Controller | `ANKA_CONTROLLER_URL` is set                              | `controller_list_templates`, `controller_request_vm`, `controller_get_vm`, `controller_terminate_vm` |
-| Local      | the `anka` CLI is detected (or `ANKA_LOCAL=on`)           | `local_list_templates`, `local_clone_vm`, `local_start_vm`, `local_show_vm`, `local_ssh_access`, `local_delete_vm` |
+| Local      | the `anka` CLI is detected (or `ANKA_LOCAL=on`)           | `local_list_templates`, `local_start_vm`, `local_show_vm`, `local_ssh_access`, `local_delete_vm` |
 
 Both can run at once. The server refuses to start if neither backend is enabled.
 
@@ -53,7 +53,7 @@ The VM template must expose port forwarding for the SSH guest port (default `22`
 
 ## Use-case 2: Local laptop
 
-The agent manages VMs on the developer's own machine through a limited command set: list templates, clone, start, show, prepare SSH access, delete. A running-VM limit (default 2) prevents exceeding the local Anka concurrency limit. The delete tool always requires a specific VM name and can never delete all VMs.
+The agent manages VMs on the developer's own machine through a limited command set: list templates, start (which always clones the chosen template into a fresh VM so the original is never touched), show, prepare SSH access, delete. A running-VM limit (default 2) prevents exceeding the local Anka concurrency limit. The delete tool always requires a specific VM name and can never delete all VMs.
 
 For SSH, `local_ssh_access` generates a throwaway ed25519 keypair on the host, copies the public key into the running VM with `anka cp`, installs it into the VM's `~/.ssh/authorized_keys` (via `anka run`), and returns the private key path plus a ready-to-use `ssh` command. The agent (on the same machine) then connects directly to the VM's shared-network IP. The VM template must have Remote Login (sshd) enabled.
 
@@ -88,7 +88,7 @@ All configuration is via environment variables.
 | `ANKA_LOCAL`         | `auto`  | `auto` (detect the binary), `on`, or `off`.                  |
 | `ANKA_BIN`           | `anka`  | Path to (or name of) the anka binary.                        |
 | `ANKA_TIMEOUT_MS`    | `300000`| Max time a single anka invocation may run.                   |
-| `ANKA_LOCAL_MAX_VMS` | `2`     | Max running VMs allowed before clone/start are refused.      |
+| `ANKA_LOCAL_MAX_VMS` | `2`     | Max running VMs allowed before start is refused.            |
 | `ANKA_LOCAL_POLL_INTERVAL_MS` | `2000` | Interval between status polls while waiting for a VM's IP. |
 | `ANKA_LOCAL_IP_TIMEOUT_MS` | `120000` | Max time `local_start_vm`/`local_ssh_access` wait for an IP. |
 
@@ -113,9 +113,8 @@ For production, terminate TLS in front of this server so the bearer token and an
 
 ### Local
 
-- `local_list_templates` - list the local VM library.
-- `local_clone_vm` `{ template, name }` - clone a template into a new VM (respects the running-VM limit).
-- `local_start_vm` `{ name, wait?, timeoutSeconds? }` - start/resume a VM (refused at the running-VM limit). By default waits for the VM to boot and obtain an IP, then returns `{ ok, name, ip }`; pass `wait: false` to return immediately.
+- `local_list_templates` - list the local VM library to find a template to clone from.
+- `local_start_vm` `{ template, name?, wait?, timeoutSeconds? }` - clone the given template into a fresh, disposable VM and start it. The original template is never started or modified. `name` defaults to an auto-generated name (`mcp-<id>`). Subject to the running-VM limit. By default waits for the new VM to boot and obtain an IP, then returns `{ ok, name, source, ip }`; pass `wait: false` to return immediately. Delete with `local_delete_vm` when done.
 - `local_show_vm` `{ name }` - get a VM's IP address.
 - `local_ssh_access` `{ name }` - install a temporary SSH key into a running VM (waiting for a pending IP if needed); returns `{ ip, port, user, private_key_path, command }`.
 - `local_delete_vm` `{ name }` - delete one specific VM.

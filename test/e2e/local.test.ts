@@ -31,7 +31,6 @@ describe("local backend e2e", () => {
     const client = await start();
     const tools = await client.listTools();
     expect(tools.sort()).toEqual([
-      "local_clone_vm",
       "local_delete_vm",
       "local_list_templates",
       "local_show_vm",
@@ -58,29 +57,45 @@ describe("local backend e2e", () => {
     expect(stopped.data).toEqual({ ok: true, ip: null });
   });
 
-  it("clones and deletes with clean payloads", async () => {
-    const client = await start();
-    const clone = await client.call("local_clone_vm", { template: "base-template", name: "clone1" });
-    expect(clone.data).toEqual({ ok: true, name: "clone1" });
-
-    const del = await client.call("local_delete_vm", { name: "clone1" });
-    expect(del.data).toEqual({ ok: true, name: "clone1", deleted: true });
-  });
-
   it("rejects flag-like names before running anka", async () => {
     const client = await start();
     const res = await client.call("local_delete_vm", { name: "--all" });
     expect(res.isError).toBe(true);
   });
 
-  it("enforces the running-VM limit on start and clone", async () => {
+  it("enforces the running-VM limit on start", async () => {
     const client = await start({ FAKE_ANKA_RUNNING: "2", ANKA_LOCAL_MAX_VMS: "2" });
-    const start1 = await client.call("local_start_vm", { name: "other" });
+    const start1 = await client.call("local_start_vm", { template: "base-template" });
     expect(start1.isError).toBe(true);
     expect(start1.data.message).toMatch(/limit of 2/);
+  });
 
-    const clone1 = await client.call("local_clone_vm", { template: "base-template", name: "clone2" });
-    expect(clone1.isError).toBe(true);
+  it("clones the template into a new VM, then starts the clone", async () => {
+    const log = join(mkdtempSync(join(tmpdir(), "fake-anka-log-")), "calls.log");
+    const client = await start({ FAKE_ANKA_RUNNING_VM: "clonevm", FAKE_ANKA_LOG: log });
+
+    const res = await client.call("local_start_vm", { template: "base-template", name: "clonevm" });
+    expect(res.isError).toBe(false);
+    expect(res.data).toEqual({
+      ok: true,
+      name: "clonevm",
+      source: "base-template",
+      ip: "192.168.64.50"
+    });
+
+    const calls = readFileSync(log, "utf8");
+    expect(calls).toMatch(/"clone","base-template","clonevm"/);
+    expect(calls).toMatch(/"start","clonevm"/);
+    // The original template must never be started directly.
+    expect(calls).not.toMatch(/"start","base-template"/);
+  });
+
+  it("auto-generates a clone name when none is given", async () => {
+    const client = await start();
+    const res = await client.call("local_start_vm", { template: "base-template", wait: false });
+    expect(res.isError).toBe(false);
+    expect(res.data.source).toBe("base-template");
+    expect(res.data.name).toMatch(/^mcp-/);
   });
 
   it("start waits for the IP and returns it", async () => {
@@ -91,16 +106,16 @@ describe("local backend e2e", () => {
       FAKE_ANKA_COUNT_FILE: counter,
       ANKA_LOCAL_POLL_INTERVAL_MS: "20"
     });
-    const res = await client.call("local_start_vm", { name: "boot" });
+    const res = await client.call("local_start_vm", { template: "base-template", name: "boot" });
     expect(res.isError).toBe(false);
-    expect(res.data).toEqual({ ok: true, name: "boot", ip: "192.168.64.50" });
+    expect(res.data).toEqual({ ok: true, name: "boot", source: "base-template", ip: "192.168.64.50" });
   });
 
   it("start can skip waiting with wait=false", async () => {
     const client = await start({ FAKE_ANKA_RUNNING_VM: "boot" });
-    const res = await client.call("local_start_vm", { name: "boot", wait: false });
+    const res = await client.call("local_start_vm", { template: "base-template", name: "boot", wait: false });
     expect(res.isError).toBe(false);
-    expect(res.data).toEqual({ ok: true, name: "boot" });
+    expect(res.data).toEqual({ ok: true, name: "boot", source: "base-template" });
   });
 
   it("start reports a timeout when no IP appears", async () => {
@@ -108,7 +123,7 @@ describe("local backend e2e", () => {
       ANKA_LOCAL_IP_TIMEOUT_MS: "150",
       ANKA_LOCAL_POLL_INTERVAL_MS: "30"
     });
-    const res = await client.call("local_start_vm", { name: "neverup" });
+    const res = await client.call("local_start_vm", { template: "base-template", name: "neverup" });
     expect(res.isError).toBe(true);
     expect(res.data.error).toMatch(/timed out/i);
   });
