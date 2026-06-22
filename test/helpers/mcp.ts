@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { spawn, type ChildProcess } from "node:child_process";
 import net from "node:net";
 import { fileURLToPath } from "node:url";
@@ -8,6 +11,15 @@ const SERVER_ENTRY = resolve(HERE, "../../src/index.ts");
 const FAKE_ANKA = resolve(HERE, "../fixtures/fake-anka.mjs");
 
 export { FAKE_ANKA };
+
+export function tempDbPath(): string {
+  const dir = mkdtempSync(join(tmpdir(), "anka-mcp-e2e-"));
+  return join(dir, "test.db");
+}
+
+export function removeTempDb(dbPath: string): void {
+  rmSync(join(dbPath, ".."), { recursive: true, force: true });
+}
 
 /** Find an available TCP port. */
 export async function getFreePort(): Promise<number> {
@@ -24,6 +36,7 @@ export async function getFreePort(): Promise<number> {
 export interface RunningServer {
   baseUrl: string;
   port: number;
+  dbPath: string;
   stop: () => void;
   stderr: () => string;
 }
@@ -32,10 +45,18 @@ export interface RunningServer {
  * Spawn the MCP server (from source via tsx) with the given env and wait until
  * it is listening. Throws with captured stderr if it exits first.
  */
-export async function startServer(env: Record<string, string>): Promise<RunningServer> {
+export async function startServer(env: Record<string, string> = {}): Promise<RunningServer> {
   const port = await getFreePort();
+  const autoDb = !env.MCP_DB_PATH;
+  const dbPath = env.MCP_DB_PATH ?? tempDbPath();
   const child: ChildProcess = spawn(process.execPath, ["--import", "tsx", SERVER_ENTRY], {
-    env: { ...process.env, MCP_HTTP_PORT: String(port), MCP_HTTP_HOST: "127.0.0.1", ...env },
+    env: {
+      ...process.env,
+      MCP_HTTP_PORT: String(port),
+      MCP_HTTP_HOST: "127.0.0.1",
+      MCP_DB_PATH: dbPath,
+      ...env
+    },
     stdio: ["ignore", "ignore", "pipe"]
   });
 
@@ -61,7 +82,11 @@ export async function startServer(env: Record<string, string>): Promise<RunningS
   return {
     baseUrl: `http://127.0.0.1:${port}`,
     port,
-    stop: () => child.kill(),
+    dbPath,
+    stop: () => {
+      child.kill();
+      if (autoDb) removeTempDb(dbPath);
+    },
     stderr: () => buf
   };
 }
@@ -168,6 +193,39 @@ export async function connect(baseUrl: string, token?: string): Promise<McpClien
         data = { message: text };
       }
       return { isError: Boolean(content.isError), data };
+    }
+  };
+}
+
+export interface AdminClient {
+  createToken: (label?: string) => Promise<{ status: number; body: any }>;
+  listTokens: () => Promise<{ status: number; body: any }>;
+  revokeToken: (id: string) => Promise<{ status: number; body: any }>;
+}
+
+/** Admin API helpers for token lifecycle tests. */
+export function adminClient(baseUrl: string, adminToken: string): AdminClient {
+  const headers = {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${adminToken}`
+  };
+
+  return {
+    createToken: async (label?: string) => {
+      const res = await fetch(`${baseUrl}/admin/tokens`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(label ? { label } : {})
+      });
+      return { status: res.status, body: await res.json() };
+    },
+    listTokens: async () => {
+      const res = await fetch(`${baseUrl}/admin/tokens`, { headers });
+      return { status: res.status, body: await res.json() };
+    },
+    revokeToken: async (id: string) => {
+      const res = await fetch(`${baseUrl}/admin/tokens/${id}`, { method: "DELETE", headers });
+      return { status: res.status, body: await res.json() };
     }
   };
 }

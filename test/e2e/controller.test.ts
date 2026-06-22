@@ -70,8 +70,9 @@ describe("controller backend e2e", () => {
     expect(res.data.error).toMatch(/terminal state/i);
   });
 
-  it("terminates an instance", async () => {
+  it("terminates an instance owned by the caller", async () => {
     const client = await startWith({ readyAfter: 1 });
+    await client.call("controller_request_vm", { vmid: "tmpl-1" });
     const res = await client.call("controller_terminate_vm", { instance_id: "inst-1" });
     expect(res.data).toEqual({ instance_id: "inst-1", terminated: true });
   });

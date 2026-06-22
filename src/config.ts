@@ -8,6 +8,12 @@ export interface AnkaMcpConfig {
   httpHost: string;
   /** Bearer token clients must present. Empty only when auth is explicitly disabled. */
   authToken: string;
+  /** Admin bearer token for /admin/* routes. Empty disables the admin API. */
+  adminToken: string;
+  /** SQLite database path for client tokens and instance ownership. */
+  dbPath: string;
+  /** When true, revoking a token terminates its owned controller instances. */
+  revokeCleanupEnabled: boolean;
   /** When true, the server runs without authentication (local dev only). */
   allowNoAuth: boolean;
   /** Allowed Origin header values for DNS-rebinding protection. Empty = unrestricted. */
@@ -128,6 +134,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AnkaMcpConfig 
     httpPort: parsePositiveIntEnv(env.MCP_HTTP_PORT, 9111),
     httpHost: env.MCP_HTTP_HOST?.trim() || "0.0.0.0",
     authToken: env.MCP_AUTH_TOKEN?.trim() || "",
+    adminToken: env.MCP_ADMIN_TOKEN?.trim() || "",
+    dbPath: env.MCP_DB_PATH?.trim() || "./anka-mcp.db",
+    revokeCleanupEnabled: !["0", "false", "no", "off"].includes(
+      env.MCP_REVOKE_CLEANUP?.trim().toLowerCase() ?? ""
+    ),
     allowNoAuth: parseBoolEnv(env.MCP_ALLOW_NO_AUTH),
     allowedOrigins: parseListEnv(env.MCP_ALLOWED_ORIGINS),
     logEnabled: !["0", "false", "no", "off"].includes(env.MCP_LOG?.trim().toLowerCase() ?? ""),

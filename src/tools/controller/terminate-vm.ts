@@ -1,5 +1,9 @@
 import { z } from "zod";
 import { controller } from "../../controller.js";
+import {
+  releaseControllerInstance,
+  requireControllerInstanceAccess
+} from "../../tokens/ownership.js";
 import { defineTool, jsonResult } from "../define-tool.js";
 
 export const controllerTerminateVmTool = defineTool({
@@ -17,7 +21,13 @@ export const controllerTerminateVmTool = defineTool({
     }
   },
   handler: async ({ instance_id }) => {
+    try {
+      requireControllerInstanceAccess(instance_id);
+    } catch {
+      return jsonResult({ ok: false, error: "Instance not owned by this credential" }, true);
+    }
     await controller.terminateVm(instance_id);
+    releaseControllerInstance(instance_id);
     return jsonResult({ instance_id, terminated: true });
   }
 });

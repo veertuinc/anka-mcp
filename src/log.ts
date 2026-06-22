@@ -15,6 +15,8 @@ export interface RequestContext {
   sessionId?: string;
   mcpClientName?: string;
   mcpClientVersion?: string;
+  credentialId?: string;
+  credentialLabel?: string;
 }
 
 const requestContext = new AsyncLocalStorage<RequestContext>();
@@ -79,6 +81,9 @@ export function buildControllerExternalId(callerExternalId?: string): string {
   if (ctx?.sessionId) {
     parts.push(`session=${ctx.sessionId}`);
   }
+  if (ctx?.credentialId) {
+    parts.push(`credential_id=${sanitizeExternalIdPart(ctx.credentialId)}`);
+  }
   if (callerExternalId?.trim()) {
     parts.push(`ref=${sanitizeExternalIdPart(callerExternalId.trim())}`);
   }
@@ -94,6 +99,7 @@ export function buildRequestContext(
     ip?: string;
     socket: { remoteAddress?: string | null };
     headers: Record<string, string | string[] | undefined>;
+    mcpCredential?: { credentialId: string; credentialLabel?: string };
   },
   clientInfo?: McpClientInfo,
   sessionId?: string
@@ -111,7 +117,9 @@ export function buildRequestContext(
     userAgent,
     sessionId: resolvedSessionId,
     mcpClientName: clientInfo?.name,
-    mcpClientVersion: clientInfo?.version
+    mcpClientVersion: clientInfo?.version,
+    credentialId: req.mcpCredential?.credentialId,
+    credentialLabel: req.mcpCredential?.credentialLabel
   };
 }
 

@@ -1,8 +1,9 @@
-import { randomUUID, timingSafeEqual } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import express, { type NextFunction, type Request, type Response } from "express";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
+import { isMcpAuthConfigured, resolveMcpCredential } from "../auth.js";
 import { config } from "../config.js";
 import {
   buildRequestContext,
@@ -14,7 +15,9 @@ import {
   type McpClientInfo
 } from "../log.js";
 import { createServer } from "../server.js";
+import { initTokenStore, getTokenStore } from "../tokens/store.js";
 import { enabledTools } from "../tools/index.js";
+import { registerAdminRoutes } from "./admin.js";
 
 const SESSION_HEADER = "mcp-session-id";
 
@@ -24,12 +27,10 @@ interface McpSession {
   clientInfo?: McpClientInfo;
 }
 
-/** Constant-time string comparison that tolerates differing lengths. */
-function safeEqual(a: string, b: string): boolean {
-  const bufA = Buffer.from(a);
-  const bufB = Buffer.from(b);
-  if (bufA.length !== bufB.length) return false;
-  return timingSafeEqual(bufA, bufB);
+declare module "express-serve-static-core" {
+  interface Request {
+    mcpCredential?: { credentialId: string; credentialLabel?: string };
+  }
 }
 
 /** Reject browser requests whose Origin is not allow-listed (DNS-rebinding protection). */
@@ -51,15 +52,12 @@ function originGuard(req: Request, res: Response, next: NextFunction): void {
   next();
 }
 
-/** Require a matching bearer token unless auth is explicitly disabled. */
+/** Require a valid MCP bearer token unless auth is explicitly disabled. */
 function authGuard(req: Request, res: Response, next: NextFunction): void {
-  if (config.allowNoAuth) {
-    next();
-    return;
-  }
   const header = req.headers.authorization ?? "";
-  const token = header.startsWith("Bearer ") ? header.slice("Bearer ".length).trim() : "";
-  if (!token || !safeEqual(token, config.authToken)) {
+  const bearerToken = header.startsWith("Bearer ") ? header.slice("Bearer ".length).trim() : "";
+  const resolved = resolveMcpCredential(bearerToken);
+  if (!resolved) {
     res
       .status(401)
       .set("WWW-Authenticate", "Bearer")
@@ -70,6 +68,7 @@ function authGuard(req: Request, res: Response, next: NextFunction): void {
       });
     return;
   }
+  req.mcpCredential = resolved;
   next();
 }
 
@@ -122,9 +121,9 @@ async function withRequestLogging<T>(
 }
 
 function assertAuthConfigured(): void {
-  if (!config.authToken && !config.allowNoAuth) {
+  if (!isMcpAuthConfigured()) {
     throw new Error(
-      "Refusing to start without authentication. Set MCP_AUTH_TOKEN to a secret, " +
+      "Refusing to start without authentication. Set MCP_AUTH_TOKEN or MCP_ADMIN_TOKEN, " +
         "or set MCP_ALLOW_NO_AUTH=1 to run unauthenticated (local dev only)."
     );
   }
@@ -145,12 +144,19 @@ function assertBackendEnabled(): void {
  * initialize.
  */
 export async function startHttp(): Promise<void> {
+  initTokenStore(config.dbPath);
+  if (config.authToken) {
+    getTokenStore().ensureLegacyCredential();
+  }
+
   assertAuthConfigured();
   assertBackendEnabled();
 
   const app = express();
   app.disable("x-powered-by");
   app.use(express.json());
+
+  registerAdminRoutes(app);
 
   const sessions = new Map<string, McpSession>();
 
@@ -236,6 +242,7 @@ export async function startHttp(): Promise<void> {
   await new Promise<void>((resolve) => {
     app.listen(config.httpPort, config.httpHost, () => {
       const authState = config.allowNoAuth ? "UNAUTHENTICATED" : "token auth";
+      const adminState = config.adminToken ? "admin API enabled" : "no admin API";
       const backends = [
         config.controllerEnabled ? "controller" : null,
         config.localEnabled ? "local" : null
@@ -243,7 +250,7 @@ export async function startHttp(): Promise<void> {
         .filter(Boolean)
         .join(", ");
       process.stderr.write(
-        `anka-mcp: listening on http://${config.httpHost}:${config.httpPort}/mcp (${authState}; backends: ${backends})\n`
+        `anka-mcp: listening on http://${config.httpHost}:${config.httpPort}/mcp (${authState}; ${adminState}; backends: ${backends})\n`
       );
       logStartupTools(enabledTools().map((tool) => tool.name));
       if (config.allowNoAuth) {

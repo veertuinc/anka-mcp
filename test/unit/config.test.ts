@@ -42,14 +42,20 @@ describe("loadConfig", () => {
     expect(loadConfig({ ...base, ANKA_LOCAL_MAX_VMS: "-3" }).localMaxVms).toBe(2);
   });
 
-  it("parses auth and origin settings", () => {
+  it("parses auth, admin, and database settings", () => {
     const c = loadConfig({
       ...base,
       MCP_AUTH_TOKEN: "  secret  ",
+      MCP_ADMIN_TOKEN: " admin ",
+      MCP_DB_PATH: " /tmp/test.db ",
+      MCP_REVOKE_CLEANUP: "off",
       MCP_ALLOW_NO_AUTH: "1",
       MCP_ALLOWED_ORIGINS: "https://a.com, https://b.com"
     });
     expect(c.authToken).toBe("secret");
+    expect(c.adminToken).toBe("admin");
+    expect(c.dbPath).toBe("/tmp/test.db");
+    expect(c.revokeCleanupEnabled).toBe(false);
     expect(c.allowNoAuth).toBe(true);
     expect(c.allowedOrigins).toEqual(["https://a.com", "https://b.com"]);
   });

@@ -14,6 +14,8 @@ export interface MockController {
   calls: { method: string; path: string }[];
   /** Parsed JSON bodies from POST /api/v1/vm start requests. */
   startPayloads: Record<string, unknown>[];
+  /** Instance ids passed to DELETE /api/v1/vm. */
+  terminatedIds: string[];
   close: () => Promise<void>;
 }
 
@@ -43,6 +45,7 @@ export async function startMockController(options: MockControllerOptions = {}): 
   const readyAfter = options.readyAfter ?? 1;
   const calls: { method: string; path: string }[] = [];
   const startPayloads: Record<string, unknown>[] = [];
+  const terminatedIds: string[] = [];
   let getCount = 0;
 
   const server = http.createServer(async (req, res) => {
@@ -93,6 +96,8 @@ export async function startMockController(options: MockControllerOptions = {}): 
       });
     }
     if (url.pathname === "/api/v1/vm" && req.method === "DELETE") {
+      const body = (await readJsonBody(req)) as { id?: string } | undefined;
+      if (body?.id) terminatedIds.push(body.id);
       return send({ status: "OK", message: "" });
     }
     res.statusCode = 404;
@@ -106,6 +111,7 @@ export async function startMockController(options: MockControllerOptions = {}): 
     url: `http://127.0.0.1:${port}`,
     calls,
     startPayloads,
+    terminatedIds,
     close: () => new Promise<void>((resolve) => server.close(() => resolve()))
   };
 }

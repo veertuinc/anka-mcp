@@ -9,6 +9,11 @@ import {
   probeSshAuth
 } from "../../ssh-key.js";
 import { buildControllerExternalId } from "../../log.js";
+import {
+  registerControllerInstance,
+  releaseControllerInstance,
+  requireControllerInstanceAccess
+} from "../../tokens/ownership.js";
 import { defineTool, jsonResult } from "../define-tool.js";
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -59,6 +64,7 @@ export const controllerRequestVmTool = defineTool({
       addSshPortForward,
       startupScript
     });
+    registerControllerInstance(instanceId);
 
     const deadline = Date.now() + config.controllerStartTimeoutMs;
     let instance: Instance | undefined;

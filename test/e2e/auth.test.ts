@@ -1,11 +1,15 @@
 import { describe, it, expect } from "vitest";
-import { startServer, expectStartFailure, rawInitialize } from "../helpers/mcp.js";
+import { startServer, expectStartFailure, rawInitialize, tempDbPath } from "../helpers/mcp.js";
 
 const DUMMY_CONTROLLER = "http://127.0.0.1:9";
 
 describe("startup guards", () => {
   it("refuses to start without authentication", async () => {
-    const err = await expectStartFailure({ ANKA_LOCAL: "off", ANKA_CONTROLLER_URL: DUMMY_CONTROLLER });
+    const err = await expectStartFailure({
+      ANKA_LOCAL: "off",
+      ANKA_CONTROLLER_URL: DUMMY_CONTROLLER,
+      MCP_DB_PATH: tempDbPath()
+    });
     expect(err).toMatch(/authentication/i);
   });
 
@@ -16,6 +20,19 @@ describe("startup guards", () => {
 });
 
 describe("bearer-token auth", () => {
+  it("allows startup with MCP_ADMIN_TOKEN only", async () => {
+    const srv = await startServer({
+      ANKA_LOCAL: "off",
+      ANKA_CONTROLLER_URL: DUMMY_CONTROLLER,
+      MCP_ADMIN_TOKEN: "admin"
+    });
+    try {
+      expect(await rawInitialize(srv.baseUrl)).toBe(401);
+    } finally {
+      srv.stop();
+    }
+  });
+
   it("rejects missing/wrong tokens and accepts the right one", async () => {
     const srv = await startServer({
       ANKA_LOCAL: "off",

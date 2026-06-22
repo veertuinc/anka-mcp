@@ -32,6 +32,20 @@ echo "MCP_AUTH_TOKEN=$MCP_AUTH_TOKEN"
 npm start
 ```
 
+For **multi-client** deployments, use the admin API instead of a single shared token:
+
+```bash
+export MCP_ADMIN_TOKEN="$(openssl rand -hex 32)"
+export ANKA_CONTROLLER_URL="http://your-controller:8090"
+npm start
+
+# Create a per-client MCP token (plaintext shown once):
+curl -s -X POST "http://localhost:9111/admin/tokens" \
+  -H "Authorization: Bearer $MCP_ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"label":"team-a"}'
+```
+
 The endpoint is served at `http://<host>:<port>/mcp`. For local dev without auth (never expose beyond localhost):
 
 ```bash
@@ -69,7 +83,10 @@ All configuration is via environment variables.
 | --------------------- | --------- | --------------------------------------------------------------------- |
 | `MCP_HTTP_PORT`       | `9111`    | Port the HTTP server listens on.                                      |
 | `MCP_HTTP_HOST`       | `0.0.0.0` | Interface to bind to.                                                 |
-| `MCP_AUTH_TOKEN`      | (none)    | Bearer token clients must present. Required unless `MCP_ALLOW_NO_AUTH`. |
+| `MCP_AUTH_TOKEN`      | (none)    | Legacy single bearer token for all MCP clients. Still supported.      |
+| `MCP_ADMIN_TOKEN`     | (none)    | Admin bearer token for `/admin/*` routes. Enables token management.   |
+| `MCP_DB_PATH`         | `./anka-mcp.db` | SQLite database for client tokens and instance ownership.       |
+| `MCP_REVOKE_CLEANUP`  | `on`      | When a token is revoked, terminate its controller VMs (set `off` to skip). |
 | `MCP_ALLOW_NO_AUTH`   | `false`   | Set to `1` to run unauthenticated (local dev only).                   |
 | `MCP_ALLOWED_ORIGINS` | (none)    | Comma-separated Origin allow-list for DNS-rebinding protection.       |
 | `MCP_LOG`             | `on`      | Request logging to stderr. Set to `off` (or `0`/`false`/`no`) to disable. |
@@ -116,14 +133,32 @@ Returned `ssh` commands include `-o IdentitiesOnly=yes` so a local ssh-agent doe
 
 For production, terminate TLS in front of this server so the bearer token and any returned credentials are not sent in cleartext.
 
+### Multi-client tokens and VM isolation
+
+When `MCP_ADMIN_TOKEN` is set, the server exposes an admin API to create and revoke per-client MCP bearer tokens. Tokens are stored in SQLite (`MCP_DB_PATH`); only hashed secrets are persisted.
+
+| Method   | Path                 | Auth                    | Purpose                          |
+| -------- | -------------------- | ----------------------- | -------------------------------- |
+| `POST`   | `/admin/tokens`      | `Bearer MCP_ADMIN_TOKEN` | Create a client token            |
+| `GET`    | `/admin/tokens`      | admin bearer            | List tokens (no secrets)         |
+| `DELETE` | `/admin/tokens/:id`  | admin bearer            | Revoke token and clean up VMs    |
+
+Admin and MCP tokens are separate: the admin token never works on `/mcp`, and client tokens never work on `/admin/*`.
+
+**Controller VM isolation:** each client token can only `controller_get_vm` / `controller_terminate_vm` instances it created via `controller_request_vm`. Revoking a token blocks MCP access immediately and, by default (`MCP_REVOKE_CLEANUP=on`), best-effort terminates all controller instances owned by that token. The revoke response includes `cleanup.terminated` and `cleanup.failed` arrays.
+
+The legacy `MCP_AUTH_TOKEN` still works as a single shared client identity (`legacy`); all controller VMs created under it share one ownership bucket.
+
+Back up `anka-mcp.db` for disaster recovery; it is created automatically on first start.
+
 ## Tools
 
 ### Controller
 
 - `controller_list_templates` - list registry templates (`id`, `name`, `arch`) to find a `vmid`.
-- `controller_request_vm` `{ vmid, tag?, name?, externalId?, addSshPortForward? }` - start one VM, install a temporary SSH key via the controller `startup_script`, wait until SSH auth succeeds over the forwarded port, return `{ instance_id, ssh: { host, port, username, private_key_path, command } }`. The controller `external_id` is auto-filled with MCP client, IP, user-agent, and session; pass `externalId` to append a custom `ref`.
-- `controller_get_vm` `{ instance_id }` - current state and SSH details for an existing instance.
-- `controller_terminate_vm` `{ instance_id }` - terminate an instance.
+- `controller_request_vm` `{ vmid, tag?, name?, externalId?, addSshPortForward? }` - start one VM, install a temporary SSH key via the controller `startup_script`, wait until SSH auth succeeds over the forwarded port, return `{ instance_id, ssh: { host, port, username, private_key_path, command } }`. The controller `external_id` is auto-filled with MCP client, IP, user-agent, session, and credential id; pass `externalId` to append a custom `ref`.
+- `controller_get_vm` `{ instance_id }` - current state and SSH details for an existing instance (must be owned by the caller's token).
+- `controller_terminate_vm` `{ instance_id }` - terminate an instance (must be owned by the caller's token).
 
 ### Local
 
@@ -161,8 +196,8 @@ npm run test:watch # watch mode
 
 The suite (Vitest) is hermetic - it needs neither a real Anka install nor a controller:
 
-- Unit tests cover config parsing, the controller client + `extractSsh`/`isSshReady` (against an in-process mock controller), and input validation / output shaping.
-- End-to-end tests spawn the real server over HTTP and exercise tools through the MCP protocol, using a fake `anka` binary ([test/fixtures/fake-anka.mjs](test/fixtures/fake-anka.mjs)) and a mock controller ([test/helpers/controllerMock.ts](test/helpers/controllerMock.ts)). They verify auth, backend gating, per-backend tool exposure, the controller request->SSH flow, the local 2-VM guard, flag-injection rejection, and the SSH key-injection flow.
+- Unit tests cover config parsing, token store, the controller client + `extractSsh`/`isSshReady` (against an in-process mock controller), and input validation / output shaping.
+- End-to-end tests spawn the real server over HTTP and exercise tools through the MCP protocol, using a fake `anka` binary ([test/fixtures/fake-anka.mjs](test/fixtures/fake-anka.mjs)) and a mock controller ([test/helpers/controllerMock.ts](test/helpers/controllerMock.ts)). They verify auth, admin token API, per-token controller VM isolation, revoke cleanup, backend gating, per-backend tool exposure, the controller request->SSH flow, the local 2-VM guard, flag-injection rejection, and the SSH key-injection flow.
 
 ## Adding new tools
 
@@ -174,10 +209,16 @@ The suite (Vitest) is hermetic - it needs neither a real Anka install nor a cont
 ```
 src/
   index.ts                 # entry: starts the HTTP server
+  auth.ts                  # MCP bearer token resolution
   config.ts                # env-driven config + backend detection
   anka.ts                  # runAnka(): execFile wrapper + JSON-envelope parsing
   controller.ts            # Anka Build Cloud Controller API client
   server.ts                # createServer(): McpServer + registerTools
+  tokens/
+    store.ts               # SQLite token + instance ownership store
+    schema.ts              # DB migrations
+    ownership.ts           # controller instance access helpers
+    cleanup.ts             # revoke-time controller VM termination
   tools/
     define-tool.ts         # defineTool helper + jsonResult
     index.ts               # registers enabled backends' tools
@@ -185,6 +226,7 @@ src/
     local/                 # local_* tools (+ vms.ts: list/count/guard/name schema)
   transports/
     http.ts                # streamable HTTP transport + auth/origin middleware
+    admin.ts               # /admin/tokens routes
 test/
   fixtures/fake-anka.mjs   # fake anka CLI for hermetic local-backend tests
   helpers/                 # mock controller + MCP-over-HTTP client

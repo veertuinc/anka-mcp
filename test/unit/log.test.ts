@@ -35,7 +35,7 @@ describe("mcpMethodsFromBody", () => {
 });
 
 describe("buildControllerExternalId", () => {
-  it("includes MCP client, IP, user-agent, session, and caller ref", () => {
+  it("includes MCP client, IP, user-agent, session, credential id, and caller ref", () => {
     const externalId = runWithRequestContext(
       {
         source: "127.0.0.1 (Cursor/3.8.11 (darwin arm64))",
@@ -43,7 +43,8 @@ describe("buildControllerExternalId", () => {
         userAgent: "Cursor/3.8.11 (darwin arm64)",
         sessionId: "cf72ddba-98e6-4a4c-b0be-6b46be70c9e4",
         mcpClientName: "cursor-vscode",
-        mcpClientVersion: "1.0.0"
+        mcpClientVersion: "1.0.0",
+        credentialId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
       },
       () => buildControllerExternalId("my-build")
     );
@@ -52,6 +53,7 @@ describe("buildControllerExternalId", () => {
     expect(externalId).toContain("ip=127.0.0.1");
     expect(externalId).toContain("ua=Cursor/3.8.11 (darwin arm64)");
     expect(externalId).toContain("session=cf72ddba-98e6-4a4c-b0be-6b46be70c9e4");
+    expect(externalId).toContain("credential_id=a1b2c3d4-e5f6-7890-abcd-ef1234567890");
     expect(externalId).toContain("ref=my-build");
   });
 });
