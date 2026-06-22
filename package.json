@@ -1,7 +1,7 @@
 {
   "name": "@veertu/anka-mcp",
-  "version": "0.1.0",
-  "description": "MCP server for the Anka CLI",
+  "version": "0.2.0",
+  "description": "An MCP server that handles agentic requests for Anka macOS VMs either from the Anka Build Cloud Controller or locally",
   "type": "module",
   "bin": {
     "anka-mcp": "dist/index.js"
