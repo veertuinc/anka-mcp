@@ -114,7 +114,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AnkaMcpConfig 
   const controllerUrl = stripTrailingSlash(env.ANKA_CONTROLLER_URL?.trim() || "");
 
   return {
-    httpPort: parsePositiveIntEnv(env.MCP_HTTP_PORT, 3000),
+    httpPort: parsePositiveIntEnv(env.MCP_HTTP_PORT, 9111),
     httpHost: env.MCP_HTTP_HOST?.trim() || "0.0.0.0",
     authToken: env.MCP_AUTH_TOKEN?.trim() || "",
     allowNoAuth: parseBoolEnv(env.MCP_ALLOW_NO_AUTH),

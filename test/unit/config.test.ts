@@ -6,7 +6,7 @@ const base = { ANKA_LOCAL: "off" } as NodeJS.ProcessEnv;
 describe("loadConfig", () => {
   it("applies sane defaults", () => {
     const c = loadConfig(base);
-    expect(c.httpPort).toBe(3000);
+    expect(c.httpPort).toBe(9111);
     expect(c.httpHost).toBe("0.0.0.0");
     expect(c.ankaBin).toBe("anka");
     expect(c.localMaxVms).toBe(2);

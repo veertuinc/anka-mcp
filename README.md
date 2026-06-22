@@ -27,7 +27,9 @@ Both can run at once. The server refuses to start if neither backend is enabled.
 ```bash
 npm install
 npm run build
-MCP_AUTH_TOKEN="$(openssl rand -hex 32)" npm start
+export MCP_AUTH_TOKEN="$(openssl rand -hex 32)"
+echo "MCP_AUTH_TOKEN=$MCP_AUTH_TOKEN"
+npm start
 ```
 
 The endpoint is served at `http://<host>:<port>/mcp`. For local dev without auth (never expose beyond localhost):
@@ -65,7 +67,7 @@ All configuration is via environment variables.
 
 | Variable              | Default   | Description                                                            |
 | --------------------- | --------- | --------------------------------------------------------------------- |
-| `MCP_HTTP_PORT`       | `3000`    | Port the HTTP server listens on.                                      |
+| `MCP_HTTP_PORT`       | `9111`    | Port the HTTP server listens on.                                      |
 | `MCP_HTTP_HOST`       | `0.0.0.0` | Interface to bind to.                                                 |
 | `MCP_AUTH_TOKEN`      | (none)    | Bearer token clients must present. Required unless `MCP_ALLOW_NO_AUTH`. |
 | `MCP_ALLOW_NO_AUTH`   | `false`   | Set to `1` to run unauthenticated (local dev only).                   |
@@ -129,7 +131,7 @@ Point any MCP client that supports streamable HTTP at `http://<host>:<port>/mcp`
 {
   "mcpServers": {
     "anka": {
-      "url": "http://your-host:3000/mcp",
+      "url": "http://your-host:9111/mcp",
       "headers": {
         "Authorization": "Bearer YOUR_TOKEN"
       }
