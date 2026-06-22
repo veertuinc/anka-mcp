@@ -2,7 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   buildAuthorizedKeysStartupScript,
   buildSshCommand,
-  encodeStartupScript
+  encodeStartupScript,
+  probeSshAuth
 } from "../../src/ssh-key.js";
 
 describe("buildAuthorizedKeysStartupScript", () => {
@@ -33,5 +34,17 @@ describe("buildSshCommand", () => {
     expect(command).toMatch(
       /^ssh -i \/tmp\/anka-mcp-ssh-abc\/id_ed25519 -p 10005 .* anka@10\.0\.0\.5$/
     );
+  });
+});
+
+describe("probeSshAuth", () => {
+  it("returns false when SSH cannot connect or authenticate", async () => {
+    const result = await probeSshAuth({
+      privateKeyPath: "/tmp/anka-mcp-nonexistent-key",
+      host: "127.0.0.1",
+      port: 1,
+      user: "anka"
+    });
+    expect(result).toBe(false);
   });
 });

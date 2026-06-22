@@ -5,7 +5,8 @@ import {
   buildAuthorizedKeysStartupScript,
   buildSshCommand,
   encodeStartupScript,
-  generateSshKeypair
+  generateSshKeypair,
+  probeSshAuth
 } from "../../ssh-key.js";
 import { buildControllerExternalId } from "../../log.js";
 import { defineTool, jsonResult } from "../define-tool.js";
@@ -21,11 +22,11 @@ export const controllerRequestVmTool = defineTool({
     title: "Request a VM from the controller",
     description:
       "Start one VM instance from a template on the Anka Build Cloud Controller, wait " +
-      "until it is running and reachable over SSH, and return the connection details " +
-      "(host, forwarded SSH port, username, private key path, ssh command). A temporary " +
-      "ed25519 key is generated and installed on the VM via the controller startup_script. " +
-      "The template must have port forwarding for the SSH guest port (default 22), or set " +
-      "addSshPortForward to add it. The agent then opens the SSH connection itself.",
+      "until it is running and the temporary SSH key authenticates over the forwarded port, " +
+      "then return the connection details (host, forwarded SSH port, username, private key path, " +
+      "ssh command). A temporary ed25519 key is generated and installed on the VM via the " +
+      "controller startup_script. The template must have port forwarding for the SSH guest port " +
+      "(default 22), or set addSshPortForward to add it. The agent then opens the SSH connection itself.",
     inputSchema: {
       vmid: z.string().min(1).describe("UUID of the template to start (from controller_list_templates)."),
       tag: z.string().optional().describe("Optional template tag. Defaults to the latest tag."),
@@ -67,20 +68,30 @@ export const controllerRequestVmTool = defineTool({
 
       if (isSshReady(instance)) {
         const endpoint = extractSshEndpoint(instance.vminfo)!;
-        return jsonResult({
-          instance_id: instanceId,
-          instance_state: instance.instance_state,
-          ssh: {
-            ...endpoint,
-            private_key_path: privateKeyPath,
-            command: buildSshCommand({
-              privateKeyPath,
-              host: endpoint.host,
-              port: endpoint.port,
-              user: endpoint.username
-            })
-          }
-        });
+        const sshVerified =
+          !config.controllerSshProbeEnabled ||
+          (await probeSshAuth({
+            privateKeyPath,
+            host: endpoint.host,
+            port: endpoint.port,
+            user: endpoint.username
+          }));
+        if (sshVerified) {
+          return jsonResult({
+            instance_id: instanceId,
+            instance_state: instance.instance_state,
+            ssh: {
+              ...endpoint,
+              private_key_path: privateKeyPath,
+              command: buildSshCommand({
+                privateKeyPath,
+                host: endpoint.host,
+                port: endpoint.port,
+                user: endpoint.username
+              })
+            }
+          });
+        }
       }
 
       if (instance.instance_state && FAILED_STATES.has(instance.instance_state)) {

@@ -190,7 +190,7 @@ export function extractSshEndpoint(vminfo: VmInfo | undefined): SshEndpoint | un
   };
 }
 
-/** True once an instance is fully started and reachable over SSH. */
+/** True once the controller reports a started VM with a forwarded SSH port. */
 export function isSshReady(instance: Instance): boolean {
   return (
     instance.instance_state === "Started" &&

@@ -64,4 +64,14 @@ describe("loadConfig", () => {
     expect(c.vmSshUser).toBe("dev");
     expect(c.vmSshGuestPort).toBe(2222);
   });
+
+  it("enables controller SSH probing by default and allows disabling it", () => {
+    expect(loadConfig({ ...base, ANKA_CONTROLLER_URL: "http://ctl:8090" }).controllerSshProbeEnabled).toBe(
+      true
+    );
+    expect(
+      loadConfig({ ...base, ANKA_CONTROLLER_URL: "http://ctl:8090", ANKA_CONTROLLER_SSH_PROBE: "0" })
+        .controllerSshProbeEnabled
+    ).toBe(false);
+  });
 });

@@ -58,3 +58,44 @@ export function buildSshCommand(options: {
     `${options.user}@${options.host}`
   );
 }
+
+const SSH_PROBE_CONNECT_TIMEOUT_SECONDS = 5;
+
+/** Verify the MCP key can authenticate over the forwarded SSH port. */
+export async function probeSshAuth(options: {
+  privateKeyPath: string;
+  host: string;
+  port: number;
+  user: string;
+}): Promise<boolean> {
+  try {
+    await execFileAsync(
+      "ssh",
+      [
+        "-i",
+        options.privateKeyPath,
+        "-p",
+        String(options.port),
+        "-o",
+        "IdentitiesOnly=yes",
+        "-o",
+        "StrictHostKeyChecking=no",
+        "-o",
+        "UserKnownHostsFile=/dev/null",
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        `ConnectTimeout=${SSH_PROBE_CONNECT_TIMEOUT_SECONDS}`,
+        `${options.user}@${options.host}`,
+        "true"
+      ],
+      {
+        timeout: (SSH_PROBE_CONNECT_TIMEOUT_SECONDS + 5) * 1000,
+        env: { ...process.env, SSH_AUTH_SOCK: "" }
+      }
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}

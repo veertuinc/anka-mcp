@@ -42,6 +42,8 @@ export interface AnkaMcpConfig {
   controllerPollIntervalMs: number;
   /** Max time to wait for a requested VM to become SSH-ready, in ms. */
   controllerStartTimeoutMs: number;
+  /** When true, controller_request_vm verifies SSH key auth before returning. */
+  controllerSshProbeEnabled: boolean;
 
   // --- SSH connection details returned to the agent ---
   /** Username the agent should use to SSH into a VM. */
@@ -143,6 +145,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AnkaMcpConfig 
     controllerTlsInsecure: parseBoolEnv(env.ANKA_CONTROLLER_TLS_INSECURE),
     controllerPollIntervalMs: parsePositiveIntEnv(env.ANKA_CONTROLLER_POLL_INTERVAL_MS, 3000),
     controllerStartTimeoutMs: parsePositiveIntEnv(env.ANKA_CONTROLLER_START_TIMEOUT_MS, 180_000),
+    controllerSshProbeEnabled: !["0", "false", "no", "off"].includes(
+      env.ANKA_CONTROLLER_SSH_PROBE?.trim().toLowerCase() ?? ""
+    ),
 
     vmSshUser: env.ANKA_VM_SSH_USER?.trim() || "anka",
     vmSshPassword: env.ANKA_VM_SSH_PASSWORD ?? "admin",

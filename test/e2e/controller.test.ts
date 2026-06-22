@@ -19,7 +19,8 @@ async function startWith(mockOpts: Parameters<typeof startMockController>[0]) {
     MCP_AUTH_TOKEN: "secret",
     ANKA_CONTROLLER_URL: mock.url,
     ANKA_CONTROLLER_POLL_INTERVAL_MS: "50",
-    ANKA_CONTROLLER_START_TIMEOUT_MS: "5000"
+    ANKA_CONTROLLER_START_TIMEOUT_MS: "5000",
+    ANKA_CONTROLLER_SSH_PROBE: "0"
   });
   return connect(srv.baseUrl, "secret");
 }
