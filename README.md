@@ -230,6 +230,52 @@ Point any MCP client that supports streamable HTTP at `http://<host>:<port>/mcp`
 }
 ```
 
+## Publishing (maintainers)
+
+Releases are published to npm by the [Publish](.github/workflows/publish.yml) workflow when a `v*` tag is pushed. Auth uses [npm trusted publishing](https://docs.npmjs.com/trusted-publishers) (OIDC) — no long-lived npm tokens in GitHub secrets.
+
+### First release (bootstrap)
+
+Trusted publishing only works once `@veertu/anka-mcp` **already exists** on npm. The first version must be published once with token or interactive auth that satisfies the `@veertu` org's 2FA policy.
+
+**Option A — interactive login (simplest):**
+
+```bash
+npm login   # use an account with publish access to @veertu; complete 2FA when prompted
+npm ci
+npm run build
+npm test
+npm publish --access public
+```
+
+**Option B — granular access token (for CI-style bootstrap):**
+
+1. On [npmjs.com](https://www.npmjs.com) → **Access Tokens** → **Generate New Token** → **Granular Access Token**
+2. Permissions: **Read and write** for the `@veertu` scope (or this package)
+3. Enable **Bypass two-factor authentication for automation** (required when the org mandates 2FA for publish)
+4. Publish:
+
+```bash
+export NODE_AUTH_TOKEN="npm_..."
+npm ci && npm run build && npm test
+npm publish --access public
+```
+
+If you see `403 ... Two-factor authentication or granular access token with bypass 2fa enabled is required`, your current login/token does not meet the org policy — use one of the options above.
+
+Then on [npmjs.com](https://www.npmjs.com/package/@veertu/anka-mcp) → **Settings** → **Trusted publishing**, add a GitHub Actions publisher:
+
+| Field | Value |
+| ----- | ----- |
+| Organization or user | `veertuinc` |
+| Repository | `anka-mcp` |
+| Workflow filename | `publish.yml` |
+| Allowed actions | `npm publish` |
+
+After the package exists and the trusted publisher is configured, push tags (e.g. `v0.1.1`) and CI publishes via OIDC. Provenance is generated automatically.
+
+If publish fails with `404 Not Found` on PUT, check: (1) package bootstrapped on npm, (2) trusted publisher fields match exactly, (3) workflow uses Node 24+ (npm 11.5.1+).
+
 ## Testing
 
 ```bash
