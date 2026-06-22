@@ -1,18 +1,15 @@
-import { z } from "zod";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { runAnka, type AnkaResult } from "../../anka.js";
 import { config } from "../../config.js";
+import { boundedName } from "../../security/schemas.js";
+import { sanitizeCliError } from "../../security/sanitize.js";
 import { jsonResult } from "../define-tool.js";
 
 /**
  * A VM/template identifier. Rejects empty values and anything starting with
  * "-" so a name can never be reinterpreted as a CLI flag (e.g. "--all").
  */
-export const vmNameSchema = z
-  .string()
-  .trim()
-  .min(1)
-  .regex(/^[^-]/, 'must not start with "-"');
+export const vmNameSchema = boundedName;
 
 /** A row from `anka -j list`. */
 export interface AnkaVm {
@@ -34,7 +31,10 @@ export async function listVms(): Promise<AnkaVm[]> {
 
 /** Extract a concise error string from a failed anka invocation. */
 export function ankaError(result: AnkaResult): string {
-  return result.message || result.stderr.trim() || `anka exited with code ${result.exitCode}`;
+  if (result.message) return result.message;
+  const stderr = result.stderr.trim();
+  if (stderr) return sanitizeCliError(stderr);
+  return `anka exited with code ${result.exitCode}`;
 }
 
 /**

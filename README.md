@@ -82,7 +82,7 @@ All configuration is via environment variables.
 | Variable              | Default   | Description                                                            |
 | --------------------- | --------- | --------------------------------------------------------------------- |
 | `MCP_HTTP_PORT`       | `9111`    | Port the HTTP server listens on.                                      |
-| `MCP_HTTP_HOST`       | `0.0.0.0` | Interface to bind to.                                                 |
+| `MCP_HTTP_HOST`       | `127.0.0.1` | Interface to bind to. Defaults to localhost; set `0.0.0.0` for remote access behind TLS. |
 | `MCP_AUTH_TOKEN`      | (none)    | Legacy single bearer token for all MCP clients. Still supported.      |
 | `MCP_ADMIN_TOKEN`     | (none)    | Admin bearer token for `/admin/*` routes. Enables token management.   |
 | `MCP_DB_PATH`         | `./anka-mcp.db` | SQLite database for client tokens and instance ownership.       |
@@ -90,6 +90,12 @@ All configuration is via environment variables.
 | `MCP_ALLOW_NO_AUTH`   | `false`   | Set to `1` to run unauthenticated (local dev only).                   |
 | `MCP_ALLOWED_ORIGINS` | (none)    | Comma-separated Origin allow-list for DNS-rebinding protection.       |
 | `MCP_LOG`             | `on`      | Request logging to stderr. Set to `off` (or `0`/`false`/`no`) to disable. |
+| `MCP_AUDIT_LOG`       | (none)    | Optional append-only audit log file (duplicates stderr log lines).    |
+| `MCP_MAX_BODY_BYTES`  | `1048576` | Max JSON request body size (1 MiB).                                   |
+| `MCP_RATE_LIMIT_RPM`  | `120`     | Max requests per client IP per minute (`0` = disabled).               |
+| `MCP_SESSION_IDLE_MS` | `3600000` | Idle MCP session eviction threshold (1 hour).                         |
+| `MCP_MAX_SESSIONS`    | `50`      | Max concurrent MCP sessions.                                          |
+| `MCP_MAX_RESPONSE_CHARS` | `32768` | Max serialized tool response size (32 KiB).                         |
 
 When logging is enabled, each MCP request is written to stderr with the client source (IP and user-agent), JSON-RPC method, tool name and arguments, tool response (with passwords and private keys redacted), and any underlying `anka` or controller API calls. Example:
 
@@ -132,6 +138,20 @@ anka-mcp: 2026-06-22T16:52:15.059Z [127.0.0.1 (Cursor/1.x)] tool local_list_temp
 Returned `ssh` commands include `-o IdentitiesOnly=yes` so a local ssh-agent does not offer other keys and cause auth failures. If you build your own command, use that flag or prefix with `SSH_AUTH_SOCK=` to disable the agent.
 
 For production, terminate TLS in front of this server so the bearer token and any returned credentials are not sent in cleartext.
+
+See [SECURITY.md](SECURITY.md) for the full operator security guide.
+
+### Remote deployment
+
+By default the server binds to **localhost only** (`127.0.0.1`). To expose it on a network:
+
+1. Set `MCP_HTTP_HOST=0.0.0.0` (or a specific interface).
+2. Terminate **TLS** in a reverse proxy in front of anka-mcp.
+3. Firewall to trusted clients only.
+4. Issue **per-client tokens** via the admin API — avoid sharing `MCP_AUTH_TOKEN`.
+5. Never use `MCP_ALLOW_NO_AUTH` on non-localhost hosts.
+
+The server prints a warning at startup when bound to a non-loopback address.
 
 ### Multi-client tokens and VM isolation
 

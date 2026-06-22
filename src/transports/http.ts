@@ -7,13 +7,22 @@ import { isMcpAuthConfigured, resolveMcpCredential } from "../auth.js";
 import { config } from "../config.js";
 import {
   buildRequestContext,
+  clientSourceFromRequest,
+  limitActorFromContext,
+  limitActorFromRequest,
+  logAuthFailure,
+  logLimitReached,
   logMcpRequest,
+  logSessionEvent,
   logStartupTools,
   mcpClientInfoFromBody,
   mcpMethodsFromBody,
   runWithRequestContextAsync,
+  type LimitActor,
   type McpClientInfo
 } from "../log.js";
+import { isLoopbackHost } from "../security/host.js";
+import { rateLimitMiddleware, SlidingWindowRateLimiter } from "../security/rate-limit.js";
 import { createServer } from "../server.js";
 import { initTokenStore, getTokenStore } from "../tokens/store.js";
 import { enabledTools } from "../tools/index.js";
@@ -25,6 +34,8 @@ interface McpSession {
   transport: StreamableHTTPServerTransport;
   server: McpServer;
   clientInfo?: McpClientInfo;
+  lastActivityAt: number;
+  actor: LimitActor;
 }
 
 declare module "express-serve-static-core" {
@@ -42,6 +53,13 @@ function originGuard(req: Request, res: Response, next: NextFunction): void {
   const origin = req.headers.origin;
   // Non-browser MCP clients omit Origin; only enforce when one is present.
   if (origin && !config.allowedOrigins.includes(origin)) {
+    logLimitReached({
+      limit: "MCP_ALLOWED_ORIGINS",
+      configured: config.allowedOrigins.join(","),
+      route: req.originalUrl,
+      actor: limitActorFromRequest(req),
+      detail: `origin=${origin}`
+    });
     res.status(403).json({
       jsonrpc: "2.0",
       error: { code: -32001, message: "Origin not allowed" },
@@ -58,6 +76,7 @@ function authGuard(req: Request, res: Response, next: NextFunction): void {
   const bearerToken = header.startsWith("Bearer ") ? header.slice("Bearer ".length).trim() : "";
   const resolved = resolveMcpCredential(bearerToken);
   if (!resolved) {
+    logAuthFailure(clientSourceFromRequest(req), "/mcp");
     res
       .status(401)
       .set("WWW-Authenticate", "Bearer")
@@ -138,6 +157,23 @@ function assertBackendEnabled(): void {
   }
 }
 
+function sweepIdleSessions(sessions: Map<string, McpSession>): void {
+  const idleBefore = Date.now() - config.sessionIdleMs;
+  for (const [id, session] of sessions) {
+    if (session.lastActivityAt >= idleBefore) continue;
+    const idleMs = Date.now() - session.lastActivityAt;
+    sessions.delete(id);
+    void session.transport.close?.();
+    logLimitReached({
+      limit: "MCP_SESSION_IDLE_MS",
+      configured: String(config.sessionIdleMs),
+      route: "/mcp",
+      actor: session.actor,
+      detail: `session_id=${id} idle_ms=${idleMs}`
+    });
+  }
+}
+
 /**
  * Run the MCP server over streamable HTTP. Each MCP session gets its own
  * server + transport pair, keyed by the session id the SDK assigns on
@@ -154,13 +190,22 @@ export async function startHttp(): Promise<void> {
 
   const app = express();
   app.disable("x-powered-by");
-  app.use(express.json());
+  app.use(express.json({ limit: config.maxBodyBytes }));
 
-  registerAdminRoutes(app);
+  const rateLimiter = new SlidingWindowRateLimiter(config.rateLimitRpm);
+  const limit = rateLimitMiddleware(rateLimiter);
+
+  registerAdminRoutes(app, limit);
 
   const sessions = new Map<string, McpSession>();
 
-  app.post("/mcp", originGuard, authGuard, async (req: Request, res: Response) => {
+  const sessionSweep = setInterval(() => {
+    sweepIdleSessions(sessions);
+    rateLimiter.prune();
+  }, 60_000);
+  sessionSweep.unref();
+
+  app.post("/mcp", limit, originGuard, authGuard, async (req: Request, res: Response) => {
     const sessionId = req.headers[SESSION_HEADER] as string | undefined;
     const existing = sessionId ? sessions.get(sessionId) : undefined;
 
@@ -168,6 +213,7 @@ export async function startHttp(): Promise<void> {
       req,
       async () => {
         if (existing) {
+          existing.lastActivityAt = Date.now();
           await existing.transport.handleRequest(req, res, req.body);
           return;
         }
@@ -181,14 +227,34 @@ export async function startHttp(): Promise<void> {
           return;
         }
 
+        if (sessions.size >= config.maxSessions) {
+          logLimitReached({
+            limit: "MCP_MAX_SESSIONS",
+            configured: String(config.maxSessions),
+            route: "/mcp",
+            actor: limitActorFromContext(),
+            detail: `active_sessions=${sessions.size}`
+          });
+          res.status(503).json({
+            jsonrpc: "2.0",
+            error: { code: -32004, message: "Too many active sessions" },
+            id: null
+          });
+          return;
+        }
+
         const clientInfo = mcpClientInfoFromBody(req.body);
         const transport = new StreamableHTTPServerTransport({
           sessionIdGenerator: () => randomUUID(),
           onsessioninitialized: (id) => {
-            sessions.set(id, { transport, server, clientInfo });
+            const actor = limitActorFromContext();
+            sessions.set(id, { transport, server, clientInfo, lastActivityAt: Date.now(), actor });
+            logSessionEvent("created", id, actor);
           },
           onsessionclosed: (id) => {
+            const closed = sessions.get(id);
             sessions.delete(id);
+            logSessionEvent("closed", id, closed?.actor);
           }
         });
 
@@ -214,6 +280,8 @@ export async function startHttp(): Promise<void> {
       return;
     }
 
+    session.lastActivityAt = Date.now();
+
     await withRequestLogging(
       req,
       async () => {
@@ -229,6 +297,11 @@ export async function startHttp(): Promise<void> {
           return;
         }
 
+        if (req.method === "DELETE") {
+          sessions.delete(sessionId!);
+          logSessionEvent("closed", sessionId!, limitActorFromContext());
+        }
+
         await session.transport.handleRequest(req, res);
       },
       session.clientInfo,
@@ -236,8 +309,36 @@ export async function startHttp(): Promise<void> {
     );
   };
 
-  app.get("/mcp", originGuard, authGuard, handleSessionRequest);
-  app.delete("/mcp", originGuard, authGuard, handleSessionRequest);
+  app.get("/mcp", limit, originGuard, authGuard, handleSessionRequest);
+  app.delete("/mcp", limit, originGuard, authGuard, handleSessionRequest);
+
+  app.use((err: unknown, req: Request, res: Response, next: NextFunction) => {
+    if (
+      err &&
+      typeof err === "object" &&
+      "type" in err &&
+      (err as { type: string }).type === "entity.too.large"
+    ) {
+      logLimitReached({
+        limit: "MCP_MAX_BODY_BYTES",
+        configured: String(config.maxBodyBytes),
+        route: req.originalUrl,
+        actor: limitActorFromRequest(req),
+        detail: "body_too_large"
+      });
+      if (req.originalUrl.startsWith("/admin")) {
+        res.status(413).json({ ok: false, error: "Request body too large" });
+        return;
+      }
+      res.status(413).json({
+        jsonrpc: "2.0",
+        error: { code: -32005, message: "Request body too large" },
+        id: null
+      });
+      return;
+    }
+    next(err);
+  });
 
   await new Promise<void>((resolve) => {
     app.listen(config.httpPort, config.httpHost, () => {
@@ -253,6 +354,11 @@ export async function startHttp(): Promise<void> {
         `anka-mcp: listening on http://${config.httpHost}:${config.httpPort}/mcp (${authState}; ${adminState}; backends: ${backends})\n`
       );
       logStartupTools(enabledTools().map((tool) => tool.name));
+      if (!isLoopbackHost(config.httpHost)) {
+        process.stderr.write(
+          "anka-mcp: WARNING listening on a non-loopback interface; use TLS termination and firewall rules\n"
+        );
+      }
       if (config.allowNoAuth) {
         process.stderr.write(
           "anka-mcp: WARNING running without authentication; do not expose this beyond localhost\n"

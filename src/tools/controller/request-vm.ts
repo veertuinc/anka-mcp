@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { config } from "../../config.js";
 import { controller, extractSshEndpoint, isSshReady, type Instance } from "../../controller.js";
+import { optionalBoundedString, uuidLike } from "../../security/schemas.js";
 import {
   buildAuthorizedKeysStartupScript,
   buildSshCommand,
@@ -10,11 +11,10 @@ import {
 } from "../../ssh-key.js";
 import { buildControllerExternalId } from "../../log.js";
 import {
-  registerControllerInstance,
-  releaseControllerInstance,
-  requireControllerInstanceAccess
+  registerControllerInstance
 } from "../../tokens/ownership.js";
 import { defineTool, jsonResult } from "../define-tool.js";
+import { controllerError } from "./results.js";
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -33,11 +33,10 @@ export const controllerRequestVmTool = defineTool({
       "controller startup_script. The template must have port forwarding for the SSH guest port " +
       "(default 22), or set addSshPortForward to add it. The agent then opens the SSH connection itself.",
     inputSchema: {
-      vmid: z.string().min(1).describe("UUID of the template to start (from controller_list_templates)."),
-      tag: z.string().optional().describe("Optional template tag. Defaults to the latest tag."),
-      name: z.string().optional().describe("Optional name for the instance."),
-      externalId: z
-        .string()
+      vmid: uuidLike.describe("UUID of the template to start (from controller_list_templates)."),
+      tag: optionalBoundedString.optional().describe("Optional template tag. Defaults to the latest tag."),
+      name: optionalBoundedString.optional().describe("Optional name for the instance."),
+      externalId: optionalBoundedString
         .optional()
         .describe(
           "Optional extra reference appended to the auto-generated external_id " +
@@ -53,6 +52,7 @@ export const controllerRequestVmTool = defineTool({
     annotations: { title: "Request a VM from the controller", openWorldHint: true }
   },
   handler: async ({ vmid, tag, name, externalId, addSshPortForward = true }) => {
+    try {
     const { privateKeyPath, publicKey } = await generateSshKeypair();
     const startupScript = encodeStartupScript(buildAuthorizedKeysStartupScript(publicKey));
 
@@ -122,5 +122,8 @@ export const controllerRequestVmTool = defineTool({
       },
       true
     );
+    } catch (error) {
+      return jsonResult({ ok: false, error: controllerError(error) }, true);
+    }
   }
 });

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { runAnka } from "../../anka.js";
+import { timeoutSecondsSchema } from "../../security/schemas.js";
 import { defineTool, jsonResult } from "../define-tool.js";
 import { ankaError, assertRunningCapacity, vmNameSchema, waitForVmIp } from "./vms.js";
 
@@ -23,9 +24,7 @@ export const localStartVmTool = defineTool({
         .boolean()
         .optional()
         .describe("Wait for the VM to obtain an IP before returning. Defaults to true."),
-      timeoutSeconds: z
-        .number()
-        .positive()
+      timeoutSeconds: timeoutSecondsSchema
         .optional()
         .describe("Override how long to wait for the IP, in seconds.")
     },

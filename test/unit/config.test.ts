@@ -7,7 +7,12 @@ describe("loadConfig", () => {
   it("applies sane defaults", () => {
     const c = loadConfig(base);
     expect(c.httpPort).toBe(9111);
-    expect(c.httpHost).toBe("0.0.0.0");
+    expect(c.httpHost).toBe("127.0.0.1");
+    expect(c.maxBodyBytes).toBe(1_048_576);
+    expect(c.rateLimitRpm).toBe(120);
+    expect(c.sessionIdleMs).toBe(3_600_000);
+    expect(c.maxSessions).toBe(50);
+    expect(c.maxResponseChars).toBe(32_768);
     expect(c.ankaBin).toBe("anka");
     expect(c.localMaxVms).toBe(2);
     expect(c.vmSshUser).toBe("anka");

@@ -1,5 +1,6 @@
 import { controller } from "../../controller.js";
 import { defineTool, jsonResult } from "../define-tool.js";
+import { runControllerTool } from "./results.js";
 
 export const controllerListTemplatesTool = defineTool({
   name: "controller_list_templates",
@@ -12,10 +13,11 @@ export const controllerListTemplatesTool = defineTool({
     inputSchema: {},
     annotations: { title: "List controller templates", readOnlyHint: true, openWorldHint: true }
   },
-  handler: async () => {
-    const templates = await controller.listTemplates();
-    return jsonResult({
-      templates: templates.map((t) => ({ id: t.id, name: t.name, arch: t.arch }))
-    });
-  }
+  handler: async () =>
+    runControllerTool(async () => {
+      const templates = await controller.listTemplates();
+      return jsonResult({
+        templates: templates.map((t) => ({ id: t.id, name: t.name, arch: t.arch }))
+      });
+    })
 });

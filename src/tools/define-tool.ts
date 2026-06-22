@@ -1,7 +1,8 @@
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { ZodRawShape } from "zod";
-import { logToolCall, logToolError } from "../log.js";
+import { config } from "../config.js";
+import { limitActorFromContext, logLimitReached, logToolCall, logToolError } from "../log.js";
 
 interface ToolConfig<InputArgs extends ZodRawShape> {
   title?: string;
@@ -54,8 +55,29 @@ export function defineTool<InputArgs extends ZodRawShape>(spec: {
 
 /** Serialize a value into a CallToolResult with a single JSON text block. */
 export function jsonResult(value: unknown, isError = false): CallToolResult {
+  let text = JSON.stringify(value, null, 2);
+  const originalLength = text.length;
+  if (text.length > config.maxResponseChars) {
+    logLimitReached({
+      limit: "MCP_MAX_RESPONSE_CHARS",
+      configured: String(config.maxResponseChars),
+      actor: limitActorFromContext(),
+      detail: `response_chars=${originalLength}`
+    });
+    text = JSON.stringify(
+      {
+        truncated: true,
+        preview: text.slice(0, Math.max(0, config.maxResponseChars - 64))
+      },
+      null,
+      2
+    );
+    if (text.length > config.maxResponseChars) {
+      text = `${text.slice(0, config.maxResponseChars - 1)}…`;
+    }
+  }
   return {
-    content: [{ type: "text", text: JSON.stringify(value, null, 2) }],
+    content: [{ type: "text", text }],
     isError
   };
 }

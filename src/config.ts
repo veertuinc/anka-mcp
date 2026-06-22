@@ -20,6 +20,18 @@ export interface AnkaMcpConfig {
   allowedOrigins: string[];
   /** When false, request/tool/backend logging to stderr is suppressed. */
   logEnabled: boolean;
+  /** Optional append-only audit log file path. Empty = stderr only. */
+  auditLogPath: string;
+  /** Max JSON request body size in bytes. */
+  maxBodyBytes: number;
+  /** Max requests per client IP per minute (0 = disabled). */
+  rateLimitRpm: number;
+  /** Idle MCP session eviction threshold in ms. */
+  sessionIdleMs: number;
+  /** Max concurrent MCP sessions. */
+  maxSessions: number;
+  /** Max serialized tool response size in characters. */
+  maxResponseChars: number;
 
   // --- Local (anka CLI) backend ---
   /** True when the local anka CLI tool set should be exposed. */
@@ -132,7 +144,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AnkaMcpConfig 
 
   return {
     httpPort: parsePositiveIntEnv(env.MCP_HTTP_PORT, 9111),
-    httpHost: env.MCP_HTTP_HOST?.trim() || "0.0.0.0",
+    httpHost: env.MCP_HTTP_HOST?.trim() || "127.0.0.1",
     authToken: env.MCP_AUTH_TOKEN?.trim() || "",
     adminToken: env.MCP_ADMIN_TOKEN?.trim() || "",
     dbPath: env.MCP_DB_PATH?.trim() || "./anka-mcp.db",
@@ -142,6 +154,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AnkaMcpConfig 
     allowNoAuth: parseBoolEnv(env.MCP_ALLOW_NO_AUTH),
     allowedOrigins: parseListEnv(env.MCP_ALLOWED_ORIGINS),
     logEnabled: !["0", "false", "no", "off"].includes(env.MCP_LOG?.trim().toLowerCase() ?? ""),
+    auditLogPath: env.MCP_AUDIT_LOG?.trim() || "",
+    maxBodyBytes: parsePositiveIntEnv(env.MCP_MAX_BODY_BYTES, 1_048_576),
+    rateLimitRpm: parseNonNegativeIntEnv(env.MCP_RATE_LIMIT_RPM, 120),
+    sessionIdleMs: parsePositiveIntEnv(env.MCP_SESSION_IDLE_MS, 3_600_000),
+    maxSessions: parsePositiveIntEnv(env.MCP_MAX_SESSIONS, 50),
+    maxResponseChars: parsePositiveIntEnv(env.MCP_MAX_RESPONSE_CHARS, 32_768),
 
     localEnabled: resolveLocalEnabled(env.ANKA_LOCAL, ankaBin, defaultLocalMode),
     ankaBin,

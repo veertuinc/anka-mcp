@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import { appendFileSync } from "node:fs";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { config } from "./config.js";
 
@@ -29,6 +30,99 @@ function timestamp(): string {
 
 function write(line: string): void {
   process.stderr.write(`anka-mcp: ${line}\n`);
+  if (config.auditLogPath) {
+    appendFileSync(config.auditLogPath, `anka-mcp: ${line}\n`, { encoding: "utf8" });
+  }
+}
+
+/** Log an auth failure (always written when logging is enabled). */
+export function logAuthFailure(source: string, route: string, reason = "invalid token"): void {
+  if (!config.logEnabled) return;
+  write(`${timestamp()} [${source}] auth failure ${route} (${reason})`);
+}
+
+/** Identifies who triggered a limit or security event in logs. */
+export interface LimitActor {
+  source?: string;
+  ip?: string;
+  credentialId?: string;
+  credentialLabel?: string;
+}
+
+function formatActor(actor: LimitActor): string {
+  const parts: string[] = [];
+  if (actor.source) parts.push(`source=${actor.source}`);
+  else if (actor.ip) parts.push(`ip=${actor.ip}`);
+  if (actor.credentialId) parts.push(`credential_id=${actor.credentialId}`);
+  if (actor.credentialLabel) parts.push(`credential_label=${actor.credentialLabel}`);
+  return parts.length > 0 ? parts.join(" ") : "unknown";
+}
+
+/** Build actor fields from an Express request (includes credential when auth ran). */
+export function limitActorFromRequest(req: {
+  ip?: string;
+  socket: { remoteAddress?: string | null };
+  headers: Record<string, string | string[] | undefined>;
+  mcpCredential?: { credentialId: string; credentialLabel?: string };
+}): LimitActor {
+  return {
+    source: clientSourceFromRequest(req),
+    ip: req.ip || req.socket.remoteAddress || "unknown",
+    credentialId: req.mcpCredential?.credentialId,
+    credentialLabel: req.mcpCredential?.credentialLabel
+  };
+}
+
+/** Build actor fields from the current async request context. */
+export function limitActorFromContext(): LimitActor {
+  const ctx = getRequestContext();
+  if (!ctx) return {};
+  return {
+    source: ctx.source,
+    ip: ctx.ip,
+    credentialId: ctx.credentialId,
+    credentialLabel: ctx.credentialLabel
+  };
+}
+
+/**
+ * Log that a configured limit was hit. Format:
+ * `LIMIT REACHED MCP_RATE_LIMIT_RPM=120 by source=… credential_id=… route=/mcp …`
+ */
+export function logLimitReached(opts: {
+  limit: string;
+  configured: string;
+  route?: string;
+  actor?: LimitActor;
+  detail?: string;
+}): void {
+  if (!config.logEnabled) return;
+  const route = opts.route ? ` route=${opts.route}` : "";
+  const detail = opts.detail ? ` ${opts.detail}` : "";
+  write(
+    `${timestamp()} LIMIT REACHED ${opts.limit}=${opts.configured} by ${formatActor(opts.actor ?? {})}${route}${detail}`
+  );
+}
+
+/** Log MCP session lifecycle events. */
+export function logSessionEvent(
+  event: "created" | "closed",
+  sessionId: string,
+  actor?: LimitActor
+): void {
+  if (!config.logEnabled) return;
+  const who = actor ? ` by ${formatActor(actor)}` : ` [${getRequestSource()}]`;
+  write(`${timestamp()} session ${event} session_id=${sessionId}${who}`);
+}
+
+/** Log admin token lifecycle events (never logs plaintext secrets). */
+export function logAdminEvent(
+  event: "token created" | "token revoked",
+  detail: { id: string; label?: string }
+): void {
+  if (!config.logEnabled) return;
+  const label = detail.label ? ` label=${detail.label}` : "";
+  write(`${timestamp()} admin ${event} id=${detail.id}${label}`);
 }
 
 /** Run `fn` with request-scoped logging context (client source). */

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   buildControllerExternalId,
+  logLimitReached,
   mcpMethodsFromBody,
   runWithRequestContext,
   sanitizeForLog
@@ -55,5 +56,41 @@ describe("buildControllerExternalId", () => {
     expect(externalId).toContain("session=cf72ddba-98e6-4a4c-b0be-6b46be70c9e4");
     expect(externalId).toContain("credential_id=a1b2c3d4-e5f6-7890-abcd-ef1234567890");
     expect(externalId).toContain("ref=my-build");
+  });
+});
+
+describe("logLimitReached", () => {
+  it("formats limit name, configured value, actor, route, and detail", () => {
+    const lines: string[] = [];
+    const stderrWrite = process.stderr.write.bind(process.stderr);
+    process.stderr.write = ((chunk: string | Uint8Array) => {
+      lines.push(String(chunk));
+      return true;
+    }) as typeof process.stderr.write;
+
+    try {
+      logLimitReached({
+        limit: "MCP_RATE_LIMIT_RPM",
+        configured: "120",
+        route: "/mcp",
+        actor: {
+          source: "10.0.0.5 (Cursor/1.0)",
+          ip: "10.0.0.5",
+          credentialId: "cred-abc",
+          credentialLabel: "team-a"
+        },
+        detail: "requests_in_window=121"
+      });
+    } finally {
+      process.stderr.write = stderrWrite;
+    }
+
+    const line = lines.join("");
+    expect(line).toContain("LIMIT REACHED MCP_RATE_LIMIT_RPM=120");
+    expect(line).toContain("source=10.0.0.5 (Cursor/1.0)");
+    expect(line).toContain("credential_id=cred-abc");
+    expect(line).toContain("credential_label=team-a");
+    expect(line).toContain("route=/mcp");
+    expect(line).toContain("requests_in_window=121");
   });
 });
