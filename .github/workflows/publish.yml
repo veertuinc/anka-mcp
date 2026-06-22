@@ -8,7 +8,7 @@ on:
 
 permissions:
   contents: read
-  id-token: write
+  id-token: write # Required for npm trusted publishing (OIDC)
 
 jobs:
   publish:
@@ -21,9 +21,9 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 22.14
           registry-url: https://registry.npmjs.org
-          cache: npm
+          package-manager-cache: false
 
       - name: Install dependencies
         run: npm ci
@@ -45,6 +45,4 @@ jobs:
         run: npm test
 
       - name: Publish to npm
-        run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public
