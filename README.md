@@ -12,9 +12,9 @@ There is intentionally no generic "run any anka command" tool.
 | Backend    | Enabled when                                              | Tools |
 | ---------- | --------------------------------------------------------- | ----- |
 | Controller | `ANKA_CONTROLLER_URL` is set                              | `controller_list_templates`, `controller_request_vm`, `controller_get_vm`, `controller_terminate_vm` |
-| Local      | the `anka` CLI is detected (or `ANKA_LOCAL=on`)           | `local_list_templates`, `local_start_vm`, `local_show_vm`, `local_ssh_access`, `local_delete_vm` |
+| Local      | `ANKA_LOCAL=on`, or `auto` when no controller is configured (detects the `anka` CLI) | `local_list_templates`, `local_start_vm`, `local_show_vm`, `local_ssh_access`, `local_delete_vm` |
 
-Both can run at once. The server refuses to start if neither backend is enabled.
+When `ANKA_CONTROLLER_URL` is set, the local backend defaults to **off** so only controller tools are exposed. Set `ANKA_LOCAL=on` or `ANKA_LOCAL=auto` to enable both. The server refuses to start if neither backend is enabled.
 
 ## Requirements
 
@@ -96,7 +96,7 @@ anka-mcp: 2026-06-22T16:52:15.059Z [127.0.0.1 (Cursor/1.x)] tool local_list_temp
 
 | Variable             | Default | Description                                                  |
 | -------------------- | ------- | ------------------------------------------------------------ |
-| `ANKA_LOCAL`         | `auto`  | `auto` (detect the binary), `on`, or `off`.                  |
+| `ANKA_LOCAL`         | `auto`* | `auto` (detect the binary), `on`, or `off`. \*Defaults to `off` when `ANKA_CONTROLLER_URL` is set. |
 | `ANKA_BIN`           | `anka`  | Path to (or name of) the anka binary.                        |
 | `ANKA_TIMEOUT_MS`    | `300000`| Max time a single anka invocation may run.                   |
 | `ANKA_LOCAL_MAX_VMS` | `2`     | Max running VMs allowed before start is refused.            |

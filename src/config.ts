@@ -101,10 +101,15 @@ function detectLocalAnka(bin: string): boolean {
 
 /**
  * Resolve whether the local backend is enabled. `ANKA_LOCAL` may be
- * `auto` (default, detect the binary), `on`/`off` to force it.
+ * `auto` (detect the binary), `on`, or `off`. When unset, `defaultMode`
+ * applies (`off` when a controller URL is configured, otherwise `auto`).
  */
-function resolveLocalEnabled(value: string | undefined, bin: string): boolean {
-  const mode = value?.trim().toLowerCase() || "auto";
+function resolveLocalEnabled(
+  value: string | undefined,
+  bin: string,
+  defaultMode: "auto" | "off" = "auto"
+): boolean {
+  const mode = value?.trim().toLowerCase() || defaultMode;
   if (mode === "on" || parseBoolEnv(mode)) return true;
   if (mode === "off" || ["0", "false", "no"].includes(mode)) return false;
   return detectLocalAnka(bin);
@@ -114,6 +119,8 @@ function resolveLocalEnabled(value: string | undefined, bin: string): boolean {
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AnkaMcpConfig {
   const ankaBin = env.ANKA_BIN?.trim() || "anka";
   const controllerUrl = stripTrailingSlash(env.ANKA_CONTROLLER_URL?.trim() || "");
+  const controllerEnabled = controllerUrl.length > 0;
+  const defaultLocalMode = controllerEnabled ? "off" : "auto";
 
   return {
     httpPort: parsePositiveIntEnv(env.MCP_HTTP_PORT, 9111),
@@ -123,14 +130,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AnkaMcpConfig 
     allowedOrigins: parseListEnv(env.MCP_ALLOWED_ORIGINS),
     logEnabled: !["0", "false", "no", "off"].includes(env.MCP_LOG?.trim().toLowerCase() ?? ""),
 
-    localEnabled: resolveLocalEnabled(env.ANKA_LOCAL, ankaBin),
+    localEnabled: resolveLocalEnabled(env.ANKA_LOCAL, ankaBin, defaultLocalMode),
     ankaBin,
     ankaTimeoutMs: parsePositiveIntEnv(env.ANKA_TIMEOUT_MS, 300_000),
     localMaxVms: parseNonNegativeIntEnv(env.ANKA_LOCAL_MAX_VMS, 2),
     localPollIntervalMs: parsePositiveIntEnv(env.ANKA_LOCAL_POLL_INTERVAL_MS, 2000),
     localIpTimeoutMs: parsePositiveIntEnv(env.ANKA_LOCAL_IP_TIMEOUT_MS, 120_000),
 
-    controllerEnabled: controllerUrl.length > 0,
+    controllerEnabled,
     controllerUrl,
     controllerAuth: env.ANKA_CONTROLLER_AUTH?.trim() || "",
     controllerTlsInsecure: parseBoolEnv(env.ANKA_CONTROLLER_TLS_INSECURE),

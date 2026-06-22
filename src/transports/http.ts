@@ -1,4 +1,5 @@
 import { randomUUID, timingSafeEqual } from "node:crypto";
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import express, { type NextFunction, type Request, type Response } from "express";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
@@ -6,12 +7,19 @@ import { config } from "../config.js";
 import {
   clientSourceFromRequest,
   logMcpRequest,
+  logStartupTools,
   mcpMethodsFromBody,
   runWithRequestContextAsync
 } from "../log.js";
 import { createServer } from "../server.js";
+import { enabledTools } from "../tools/index.js";
 
 const SESSION_HEADER = "mcp-session-id";
+
+interface McpSession {
+  transport: StreamableHTTPServerTransport;
+  server: McpServer;
+}
 
 /** Constant-time string comparison that tolerates differing lengths. */
 function safeEqual(a: string, b: string): boolean {
@@ -137,15 +145,15 @@ export async function startHttp(): Promise<void> {
   app.disable("x-powered-by");
   app.use(express.json());
 
-  const transports = new Map<string, StreamableHTTPServerTransport>();
+  const sessions = new Map<string, McpSession>();
 
   app.post("/mcp", originGuard, authGuard, async (req: Request, res: Response) => {
     await withRequestLogging(req, async () => {
       const sessionId = req.headers[SESSION_HEADER] as string | undefined;
-      const existing = sessionId ? transports.get(sessionId) : undefined;
+      const existing = sessionId ? sessions.get(sessionId) : undefined;
 
       if (existing) {
-        await existing.handleRequest(req, res, req.body);
+        await existing.transport.handleRequest(req, res, req.body);
         return;
       }
 
@@ -161,15 +169,15 @@ export async function startHttp(): Promise<void> {
       const transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => randomUUID(),
         onsessioninitialized: (id) => {
-          transports.set(id, transport);
+          sessions.set(id, { transport, server });
         },
         onsessionclosed: (id) => {
-          transports.delete(id);
+          sessions.delete(id);
         }
       });
 
       transport.onclose = () => {
-        if (transport.sessionId) transports.delete(transport.sessionId);
+        if (transport.sessionId) sessions.delete(transport.sessionId);
       };
 
       const server = createServer();
@@ -182,13 +190,27 @@ export async function startHttp(): Promise<void> {
   const handleSessionRequest = async (req: Request, res: Response) => {
     await withRequestLogging(req, async () => {
       const sessionId = req.headers[SESSION_HEADER] as string | undefined;
-      const transport = sessionId ? transports.get(sessionId) : undefined;
-      if (!transport) {
+      const session = sessionId ? sessions.get(sessionId) : undefined;
+      if (!session) {
         res.status(400).send("Invalid or missing session ID");
         return;
       }
       logMcpRequest(`${req.method} /mcp`, { session: sessionId });
-      await transport.handleRequest(req, res);
+
+      if (req.method === "GET") {
+        // GET opens the standalone SSE stream. Notify the client to fetch tools once
+        // the stream is mapped — registerTool() fires list_changed before connect/SSE
+        // exist, so clients like Cursor that cache tools never see an update otherwise.
+        const handling = session.transport.handleRequest(req, res);
+        setImmediate(() => {
+          void session.server.sendToolListChanged();
+          logMcpRequest("notifications/tools/list_changed");
+        });
+        await handling;
+        return;
+      }
+
+      await session.transport.handleRequest(req, res);
     });
   };
 
@@ -207,6 +229,7 @@ export async function startHttp(): Promise<void> {
       process.stderr.write(
         `anka-mcp: listening on http://${config.httpHost}:${config.httpPort}/mcp (${authState}; backends: ${backends})\n`
       );
+      logStartupTools(enabledTools().map((tool) => tool.name));
       if (config.allowNoAuth) {
         process.stderr.write(
           "anka-mcp: WARNING running without authentication; do not expose this beyond localhost\n"

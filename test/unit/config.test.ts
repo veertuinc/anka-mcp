@@ -27,6 +27,15 @@ describe("loadConfig", () => {
     expect(loadConfig({ ANKA_LOCAL: "off" }).localEnabled).toBe(false);
   });
 
+  it("defaults local to off when a controller URL is configured", () => {
+    const env = { ANKA_CONTROLLER_URL: "http://ctl:8090" } as NodeJS.ProcessEnv;
+    expect(loadConfig(env).localEnabled).toBe(false);
+    expect(loadConfig({ ...env, ANKA_LOCAL: "on" }).localEnabled).toBe(true);
+    expect(loadConfig({ ...env, ANKA_LOCAL: "auto" }).localEnabled).toBe(
+      loadConfig({ ANKA_LOCAL: "auto" }).localEnabled
+    );
+  });
+
   it("allows a zero VM limit but rejects negatives", () => {
     expect(loadConfig({ ...base, ANKA_LOCAL_MAX_VMS: "0" }).localMaxVms).toBe(0);
     expect(loadConfig({ ...base, ANKA_LOCAL_MAX_VMS: "5" }).localMaxVms).toBe(5);

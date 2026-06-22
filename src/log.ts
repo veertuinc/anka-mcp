@@ -131,3 +131,8 @@ export function logControllerRequest(
   const status = outcome.ok ? "ok" : `failed${outcome.detail ? `: ${outcome.detail}` : ""}`;
   write(`${timestamp()} [${getRequestSource()}] controller ${method} ${path} -> ${status}`);
 }
+
+/** Log the tool names registered at startup (always written, like the listen banner). */
+export function logStartupTools(toolNames: string[]): void {
+  process.stderr.write(`anka-mcp: tools: ${toolNames.join(", ") || "(none)"}\n`);
+}
