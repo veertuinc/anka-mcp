@@ -1,5 +1,5 @@
 {
-  "name": "anka-mcp",
+  "name": "@veertu/anka-mcp",
   "version": "0.1.0",
   "description": "MCP server for the Anka CLI",
   "type": "module",
@@ -14,12 +14,22 @@
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build && npm test"
   },
   "engines": {
     "node": ">=18"
   },
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/veertuinc/anka-mcp.git"
+  },
+  "bugs": "https://github.com/veertuinc/anka-mcp/issues",
+  "homepage": "https://github.com/veertuinc/anka-mcp#readme",
+  "publishConfig": {
+    "access": "public"
+  },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "better-sqlite3": "^12.11.1",

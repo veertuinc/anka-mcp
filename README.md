@@ -22,7 +22,30 @@ When `ANKA_CONTROLLER_URL` is set, the local backend defaults to **off** so only
 - For the local backend: the `anka` CLI installed and on `PATH` (or point `ANKA_BIN` at it)
 - For the controller backend: network access to an Anka Build Cloud Controller
 
-## Install, build, run
+## Install and run
+
+### From npm
+
+Requires Node.js >= 18.
+
+```bash
+# run without a global install
+npx @veertu/anka-mcp
+
+# or install globally
+npm install -g @veertu/anka-mcp
+anka-mcp
+```
+
+Set auth and backend env vars before starting (see [Configuration](#configuration)). Example:
+
+```bash
+export MCP_AUTH_TOKEN="$(openssl rand -hex 32)"
+echo "MCP_AUTH_TOKEN=$MCP_AUTH_TOKEN"
+anka-mcp
+```
+
+### From source (contributors)
 
 ```bash
 npm install
