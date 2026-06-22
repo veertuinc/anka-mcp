@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { mcpMethodsFromBody, sanitizeForLog } from "../../src/log.js";
+import {
+  buildControllerExternalId,
+  mcpMethodsFromBody,
+  runWithRequestContext,
+  sanitizeForLog
+} from "../../src/log.js";
 
 describe("sanitizeForLog", () => {
   it("redacts sensitive keys recursively", () => {
@@ -26,5 +31,27 @@ describe("mcpMethodsFromBody", () => {
         { method: "tools/call", params: { name: "local_show_vm" } }
       ])
     ).toEqual(["tools/list", "tools/call"]);
+  });
+});
+
+describe("buildControllerExternalId", () => {
+  it("includes MCP client, IP, user-agent, session, and caller ref", () => {
+    const externalId = runWithRequestContext(
+      {
+        source: "127.0.0.1 (Cursor/3.8.11 (darwin arm64))",
+        ip: "127.0.0.1",
+        userAgent: "Cursor/3.8.11 (darwin arm64)",
+        sessionId: "cf72ddba-98e6-4a4c-b0be-6b46be70c9e4",
+        mcpClientName: "cursor-vscode",
+        mcpClientVersion: "1.0.0"
+      },
+      () => buildControllerExternalId("my-build")
+    );
+    expect(externalId).toContain("anka-mcp");
+    expect(externalId).toContain("client=cursor-vscode/1.0.0");
+    expect(externalId).toContain("ip=127.0.0.1");
+    expect(externalId).toContain("ua=Cursor/3.8.11 (darwin arm64)");
+    expect(externalId).toContain("session=cf72ddba-98e6-4a4c-b0be-6b46be70c9e4");
+    expect(externalId).toContain("ref=my-build");
   });
 });

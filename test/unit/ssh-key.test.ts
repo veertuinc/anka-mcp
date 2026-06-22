@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   buildAuthorizedKeysStartupScript,
+  buildSshCommand,
   encodeStartupScript
 } from "../../src/ssh-key.js";
 
@@ -17,5 +18,20 @@ describe("buildAuthorizedKeysStartupScript", () => {
     const script = buildAuthorizedKeysStartupScript("ssh-ed25519 AAA test");
     const encoded = encodeStartupScript(script);
     expect(Buffer.from(encoded, "base64").toString("utf8")).toBe(script);
+  });
+});
+
+describe("buildSshCommand", () => {
+  it("uses only the MCP key, ignoring ssh-agent identities", () => {
+    const command = buildSshCommand({
+      privateKeyPath: "/tmp/anka-mcp-ssh-abc/id_ed25519",
+      host: "10.0.0.5",
+      port: 10005,
+      user: "anka"
+    });
+    expect(command).toContain("-o IdentitiesOnly=yes");
+    expect(command).toMatch(
+      /^ssh -i \/tmp\/anka-mcp-ssh-abc\/id_ed25519 -p 10005 .* anka@10\.0\.0\.5$/
+    );
   });
 });

@@ -40,7 +40,7 @@ MCP_ALLOW_NO_AUTH=1 npm run dev
 
 ## Use-case 1: Controller fleet
 
-The agent asks the MCP server for a VM; the server generates a temporary SSH key, passes it to the VM via the controller `startup_script`, waits until the instance is running and SSH-reachable, and returns the host IP, forwarded SSH port, private key path, and a ready-to-use `ssh` command. The agent then SSHes in itself.
+The agent asks the MCP server for a VM; the server generates a temporary SSH key, passes it to the VM via the controller `startup_script` (with `startup_script_condition: 1` so the script runs immediately, before networking), waits until the instance is running and SSH-reachable, and returns the host IP, forwarded SSH port, private key path, and a ready-to-use `ssh` command. The agent then SSHes in itself.
 
 ```mermaid
 flowchart LR
@@ -111,6 +111,8 @@ anka-mcp: 2026-06-22T16:52:15.059Z [127.0.0.1 (Cursor/1.x)] tool local_list_temp
 | `ANKA_VM_SSH_PASSWORD`| `admin` | Password returned for SSHing into a VM.              |
 | `ANKA_VM_SSH_GUEST_PORT` | `22` | Guest port that maps to SSH (matched in port forwarding). |
 
+Returned `ssh` commands include `-o IdentitiesOnly=yes` so a local ssh-agent does not offer other keys and cause auth failures. If you build your own command, use that flag or prefix with `SSH_AUTH_SOCK=` to disable the agent.
+
 For production, terminate TLS in front of this server so the bearer token and any returned credentials are not sent in cleartext.
 
 ## Tools
@@ -118,7 +120,7 @@ For production, terminate TLS in front of this server so the bearer token and an
 ### Controller
 
 - `controller_list_templates` - list registry templates (`id`, `name`, `arch`) to find a `vmid`.
-- `controller_request_vm` `{ vmid, tag?, name?, externalId?, addSshPortForward? }` - start one VM, install a temporary SSH key via the controller `startup_script`, wait until SSH-ready, return `{ instance_id, ssh: { host, port, username, private_key_path, command } }`.
+- `controller_request_vm` `{ vmid, tag?, name?, externalId?, addSshPortForward? }` - start one VM, install a temporary SSH key via the controller `startup_script`, wait until SSH-ready, return `{ instance_id, ssh: { host, port, username, private_key_path, command } }`. The controller `external_id` is auto-filled with MCP client, IP, user-agent, and session; pass `externalId` to append a custom `ref`.
 - `controller_get_vm` `{ instance_id }` - current state and SSH details for an existing instance.
 - `controller_terminate_vm` `{ instance_id }` - terminate an instance.
 

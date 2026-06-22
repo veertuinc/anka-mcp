@@ -64,7 +64,7 @@ describe("ControllerClient", () => {
     expect(mock.startPayloads[0]).toMatchObject({
       vmid: "tmpl-1",
       count: 1,
-      startup_script_condition: 0,
+      startup_script_condition: 1,
       port_forwarding_override: [{ name: "ssh", guest_port: "22" }]
     });
     const decoded = Buffer.from(String(mock.startPayloads[0].startup_script), "base64").toString("utf8");

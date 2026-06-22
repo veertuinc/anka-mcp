@@ -5,11 +5,13 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { config } from "../config.js";
 import {
-  clientSourceFromRequest,
+  buildRequestContext,
   logMcpRequest,
   logStartupTools,
+  mcpClientInfoFromBody,
   mcpMethodsFromBody,
-  runWithRequestContextAsync
+  runWithRequestContextAsync,
+  type McpClientInfo
 } from "../log.js";
 import { createServer } from "../server.js";
 import { enabledTools } from "../tools/index.js";
@@ -19,6 +21,7 @@ const SESSION_HEADER = "mcp-session-id";
 interface McpSession {
   transport: StreamableHTTPServerTransport;
   server: McpServer;
+  clientInfo?: McpClientInfo;
 }
 
 /** Constant-time string comparison that tolerates differing lengths. */
@@ -106,9 +109,13 @@ function logIncomingMcpRequest(req: Request): void {
   }
 }
 
-async function withRequestLogging<T>(req: Request, fn: () => Promise<T>): Promise<T> {
-  const source = clientSourceFromRequest(req);
-  return runWithRequestContextAsync({ source }, async () => {
+async function withRequestLogging<T>(
+  req: Request,
+  fn: () => Promise<T>,
+  clientInfo?: McpClientInfo,
+  sessionId?: string
+): Promise<T> {
+  return runWithRequestContextAsync(buildRequestContext(req, clientInfo, sessionId), async () => {
     logIncomingMcpRequest(req);
     return fn();
   });
@@ -148,70 +155,79 @@ export async function startHttp(): Promise<void> {
   const sessions = new Map<string, McpSession>();
 
   app.post("/mcp", originGuard, authGuard, async (req: Request, res: Response) => {
-    await withRequestLogging(req, async () => {
-      const sessionId = req.headers[SESSION_HEADER] as string | undefined;
-      const existing = sessionId ? sessions.get(sessionId) : undefined;
+    const sessionId = req.headers[SESSION_HEADER] as string | undefined;
+    const existing = sessionId ? sessions.get(sessionId) : undefined;
 
-      if (existing) {
-        await existing.transport.handleRequest(req, res, req.body);
-        return;
-      }
-
-      if (!isInitializeRequest(req.body)) {
-        res.status(400).json({
-          jsonrpc: "2.0",
-          error: { code: -32000, message: "No valid session ID provided" },
-          id: null
-        });
-        return;
-      }
-
-      const transport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: () => randomUUID(),
-        onsessioninitialized: (id) => {
-          sessions.set(id, { transport, server });
-        },
-        onsessionclosed: (id) => {
-          sessions.delete(id);
+    await withRequestLogging(
+      req,
+      async () => {
+        if (existing) {
+          await existing.transport.handleRequest(req, res, req.body);
+          return;
         }
-      });
 
-      transport.onclose = () => {
-        if (transport.sessionId) sessions.delete(transport.sessionId);
-      };
+        if (!isInitializeRequest(req.body)) {
+          res.status(400).json({
+            jsonrpc: "2.0",
+            error: { code: -32000, message: "No valid session ID provided" },
+            id: null
+          });
+          return;
+        }
 
-      const server = createServer();
-      await server.connect(transport);
-      await transport.handleRequest(req, res, req.body);
-    });
+        const clientInfo = mcpClientInfoFromBody(req.body);
+        const transport = new StreamableHTTPServerTransport({
+          sessionIdGenerator: () => randomUUID(),
+          onsessioninitialized: (id) => {
+            sessions.set(id, { transport, server, clientInfo });
+          },
+          onsessionclosed: (id) => {
+            sessions.delete(id);
+          }
+        });
+
+        transport.onclose = () => {
+          if (transport.sessionId) sessions.delete(transport.sessionId);
+        };
+
+        const server = createServer();
+        await server.connect(transport);
+        await transport.handleRequest(req, res, req.body);
+      },
+      existing?.clientInfo,
+      sessionId
+    );
   });
 
   // GET (server-to-client SSE stream) and DELETE (terminate session).
   const handleSessionRequest = async (req: Request, res: Response) => {
-    await withRequestLogging(req, async () => {
-      const sessionId = req.headers[SESSION_HEADER] as string | undefined;
-      const session = sessionId ? sessions.get(sessionId) : undefined;
-      if (!session) {
-        res.status(400).send("Invalid or missing session ID");
-        return;
-      }
-      logMcpRequest(`${req.method} /mcp`, { session: sessionId });
+    const sessionId = req.headers[SESSION_HEADER] as string | undefined;
+    const session = sessionId ? sessions.get(sessionId) : undefined;
+    if (!session) {
+      res.status(400).send("Invalid or missing session ID");
+      return;
+    }
 
-      if (req.method === "GET") {
-        // GET opens the standalone SSE stream. Notify the client to fetch tools once
-        // the stream is mapped — registerTool() fires list_changed before connect/SSE
-        // exist, so clients like Cursor that cache tools never see an update otherwise.
-        const handling = session.transport.handleRequest(req, res);
-        setImmediate(() => {
-          void session.server.sendToolListChanged();
-          logMcpRequest("notifications/tools/list_changed");
-        });
-        await handling;
-        return;
-      }
+    await withRequestLogging(
+      req,
+      async () => {
+        logMcpRequest(`${req.method} /mcp`, { session: sessionId });
 
-      await session.transport.handleRequest(req, res);
-    });
+        if (req.method === "GET") {
+          const handling = session.transport.handleRequest(req, res);
+          setImmediate(() => {
+            void session.server.sendToolListChanged();
+            logMcpRequest("notifications/tools/list_changed");
+          });
+          await handling;
+          return;
+        }
+
+        await session.transport.handleRequest(req, res);
+      },
+      session.clientInfo,
+      sessionId
+    );
   };
 
   app.get("/mcp", originGuard, authGuard, handleSessionRequest);

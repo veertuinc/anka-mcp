@@ -2,9 +2,19 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { config } from "./config.js";
 
+export interface McpClientInfo {
+  name?: string;
+  version?: string;
+}
+
 export interface RequestContext {
-  /** Client IP (and optional user-agent) for the active HTTP request. */
+  /** Compact label for logs: IP plus optional user-agent. */
   source: string;
+  ip: string;
+  userAgent?: string;
+  sessionId?: string;
+  mcpClientName?: string;
+  mcpClientVersion?: string;
 }
 
 const requestContext = new AsyncLocalStorage<RequestContext>();
@@ -34,6 +44,96 @@ export async function runWithRequestContextAsync<T>(
 
 export function getRequestSource(): string {
   return requestContext.getStore()?.source ?? "unknown";
+}
+
+export function getRequestContext(): RequestContext | undefined {
+  return requestContext.getStore();
+}
+
+const MAX_CONTROLLER_EXTERNAL_ID_LENGTH = 512;
+
+function sanitizeExternalIdPart(value: string): string {
+  return value.replace(/[\r\n\t\0]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Build a controller `external_id` that identifies the MCP caller for admins.
+ * Always includes client/IP/session context; an optional caller `ref` is appended.
+ */
+export function buildControllerExternalId(callerExternalId?: string): string {
+  const ctx = requestContext.getStore();
+  const parts = ["anka-mcp"];
+
+  if (ctx?.mcpClientName) {
+    const client = ctx.mcpClientVersion
+      ? `${ctx.mcpClientName}/${ctx.mcpClientVersion}`
+      : ctx.mcpClientName;
+    parts.push(`client=${sanitizeExternalIdPart(client)}`);
+  }
+  if (ctx?.ip) {
+    parts.push(`ip=${sanitizeExternalIdPart(ctx.ip.replace(/^::ffff:/, ""))}`);
+  }
+  if (ctx?.userAgent) {
+    parts.push(`ua=${sanitizeExternalIdPart(ctx.userAgent)}`);
+  }
+  if (ctx?.sessionId) {
+    parts.push(`session=${ctx.sessionId}`);
+  }
+  if (callerExternalId?.trim()) {
+    parts.push(`ref=${sanitizeExternalIdPart(callerExternalId.trim())}`);
+  }
+
+  const externalId = parts.join(" ");
+  if (externalId.length <= MAX_CONTROLLER_EXTERNAL_ID_LENGTH) return externalId;
+  return `${externalId.slice(0, MAX_CONTROLLER_EXTERNAL_ID_LENGTH - 1)}…`;
+}
+
+/** Build request-scoped context from an HTTP request and optional MCP client info. */
+export function buildRequestContext(
+  req: {
+    ip?: string;
+    socket: { remoteAddress?: string | null };
+    headers: Record<string, string | string[] | undefined>;
+  },
+  clientInfo?: McpClientInfo,
+  sessionId?: string
+): RequestContext {
+  const ip = req.ip || req.socket.remoteAddress || "unknown";
+  const userAgent =
+    typeof req.headers["user-agent"] === "string" ? req.headers["user-agent"] : undefined;
+  const resolvedSessionId =
+    sessionId ??
+    (typeof req.headers["mcp-session-id"] === "string" ? req.headers["mcp-session-id"] : undefined);
+
+  return {
+    source: clientSourceFromRequest(req),
+    ip,
+    userAgent,
+    sessionId: resolvedSessionId,
+    mcpClientName: clientInfo?.name,
+    mcpClientVersion: clientInfo?.version
+  };
+}
+
+/** Extract MCP clientInfo from an initialize JSON-RPC body. */
+export function mcpClientInfoFromBody(body: unknown): McpClientInfo | undefined {
+  const messages = Array.isArray(body) ? body : [body];
+  for (const message of messages) {
+    if (!message || typeof message !== "object" || (message as { method?: string }).method !== "initialize") {
+      continue;
+    }
+    const clientInfo = (message as { params?: { clientInfo?: unknown } }).params?.clientInfo;
+    if (!clientInfo || typeof clientInfo !== "object") continue;
+    return {
+      name: typeof (clientInfo as { name?: unknown }).name === "string"
+        ? (clientInfo as { name: string }).name
+        : undefined,
+      version: typeof (clientInfo as { version?: unknown }).version === "string"
+        ? (clientInfo as { version: string }).version
+        : undefined
+    };
+  }
+  return undefined;
 }
 
 /** Build a compact client label from an Express request. */

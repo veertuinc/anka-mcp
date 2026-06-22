@@ -142,7 +142,8 @@ export class ControllerClient {
     }
     if (req.startupScript) {
       payload.startup_script = req.startupScript;
-      payload.startup_script_condition = 0;
+      // 1 = run immediately (before networking); installs the SSH key as early as possible.
+      payload.startup_script_condition = 1;
     }
 
     const body = await this.request<string[]>("POST", "/api/v1/vm", payload);

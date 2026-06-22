@@ -12,6 +12,7 @@ MCP tool results are fed straight into an agent's context, so every field costs 
   - `local_show_vm` -> `{ ip }` only.
   - `controller_list_templates` -> `{ id, name, arch }` per template.
   - `controller_request_vm` / `controller_get_vm` -> instance state plus `ssh: { host, port, username, private_key_path, command }` for request (get_vm omits the key fields); do not echo the full `vminfo`.
+- Use the returned `command` as-is (it sets `-o IdentitiesOnly=yes`). If you construct SSH yourself, use that flag or `SSH_AUTH_SOCK=` so a local ssh-agent does not override the MCP-provided key.
 - On failure, return `{ ok: false, error }` (or throw a clear `Error`) with a concise message. Do not dump verbose command output.
 - On success for action tools, return `{ ok: true, ... }` with just the identifying fields (e.g. the VM `name`).
 

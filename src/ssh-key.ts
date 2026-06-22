@@ -54,6 +54,7 @@ export function buildSshCommand(options: {
 }): string {
   return (
     `ssh -i ${options.privateKeyPath} -p ${options.port} ` +
-    `-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${options.user}@${options.host}`
+    `-o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ` +
+    `${options.user}@${options.host}`
   );
 }

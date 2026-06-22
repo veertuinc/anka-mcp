@@ -7,6 +7,7 @@ import {
   encodeStartupScript,
   generateSshKeypair
 } from "../../ssh-key.js";
+import { buildControllerExternalId } from "../../log.js";
 import { defineTool, jsonResult } from "../define-tool.js";
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -32,7 +33,10 @@ export const controllerRequestVmTool = defineTool({
       externalId: z
         .string()
         .optional()
-        .describe("Optional arbitrary identifier stored with the instance for troubleshooting."),
+        .describe(
+          "Optional extra reference appended to the auto-generated external_id " +
+            "(which always records MCP client, IP, user-agent, and session)."
+        ),
       addSshPortForward: z
         .boolean()
         .optional()
@@ -50,7 +54,7 @@ export const controllerRequestVmTool = defineTool({
       vmid,
       tag,
       name,
-      externalId,
+      externalId: buildControllerExternalId(externalId),
       addSshPortForward,
       startupScript
     });

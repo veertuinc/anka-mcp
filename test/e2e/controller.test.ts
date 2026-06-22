@@ -54,8 +54,12 @@ describe("controller backend e2e", () => {
     expect(res.data.ssh.private_key_path).toContain("id_ed25519");
     expect(res.data.ssh.command).toMatch(/ssh -i .+ -p 10005 .*@10\.0\.0\.5/);
     expect(mock!.startPayloads[0].startup_script).toBeTruthy();
+    expect(mock!.startPayloads[0].startup_script_condition).toBe(1);
     const script = Buffer.from(String(mock!.startPayloads[0].startup_script), "base64").toString("utf8");
     expect(script).toContain("authorized_keys");
+    expect(String(mock!.startPayloads[0].external_id)).toContain("anka-mcp");
+    expect(String(mock!.startPayloads[0].external_id)).toContain("client=test/0");
+    expect(String(mock!.startPayloads[0].external_id)).toContain("ip=127.0.0.1");
   });
 
   it("reports a terminal state as an error", async () => {
