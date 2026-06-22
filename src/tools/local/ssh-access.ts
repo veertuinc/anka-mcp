@@ -1,29 +1,9 @@
-import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { mkdtemp } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { promisify } from "node:util";
 import { runAnka } from "../../anka.js";
 import { config } from "../../config.js";
+import { buildSshCommand, generateSshKeypair } from "../../ssh-key.js";
 import { defineTool, jsonResult } from "../define-tool.js";
 import { ankaError, showVm, vmNameSchema, waitForVmIp } from "./vms.js";
-
-const execFileAsync = promisify(execFile);
-
-/** Generate a throwaway ed25519 keypair in a temp dir; returns the private key path. */
-async function generateKeypair(): Promise<string> {
-  const dir = await mkdtemp(join(tmpdir(), "anka-mcp-ssh-"));
-  const privateKeyPath = join(dir, "id_ed25519");
-  await execFileAsync("ssh-keygen", [
-    "-t", "ed25519",
-    "-N", "",
-    "-C", "anka-mcp",
-    "-f", privateKeyPath,
-    "-q"
-  ]);
-  return privateKeyPath;
-}
 
 export const localSshAccessTool = defineTool({
   name: "local_ssh_access",
@@ -58,7 +38,7 @@ export const localSshAccessTool = defineTool({
       ip = waited.ip;
     }
 
-    const privateKeyPath = await generateKeypair();
+    const { privateKeyPath } = await generateSshKeypair();
 
     // Copy the public key into the VM, then install it into authorized_keys.
     const remotePubPath = `/tmp/anka-mcp-${randomUUID()}.pub`;
@@ -82,9 +62,7 @@ export const localSshAccessTool = defineTool({
 
     const port = config.vmSshGuestPort;
     const user = config.vmSshUser;
-    const command =
-      `ssh -i ${privateKeyPath} -p ${port} ` +
-      `-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${user}@${ip}`;
+    const command = buildSshCommand({ privateKeyPath, host: ip, port, user });
 
     return jsonResult({
       ok: true,

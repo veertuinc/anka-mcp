@@ -11,7 +11,7 @@ MCP tool results are fed straight into an agent's context, so every field costs 
   - `local_list_templates` -> `{ name, uuid }` per VM only.
   - `local_show_vm` -> `{ ip }` only.
   - `controller_list_templates` -> `{ id, name, arch }` per template.
-  - `controller_request_vm` / `controller_get_vm` -> instance state plus `ssh: { host, port, username, password }`; do not echo the full `vminfo`.
+  - `controller_request_vm` / `controller_get_vm` -> instance state plus `ssh: { host, port, username, private_key_path, command }` for request (get_vm omits the key fields); do not echo the full `vminfo`.
 - On failure, return `{ ok: false, error }` (or throw a clear `Error`) with a concise message. Do not dump verbose command output.
 - On success for action tools, return `{ ok: true, ... }` with just the identifying fields (e.g. the VM `name`).
 

@@ -1,6 +1,12 @@
 import { z } from "zod";
 import { config } from "../../config.js";
-import { controller, extractSsh, isSshReady, type Instance } from "../../controller.js";
+import { controller, extractSshEndpoint, isSshReady, type Instance } from "../../controller.js";
+import {
+  buildAuthorizedKeysStartupScript,
+  buildSshCommand,
+  encodeStartupScript,
+  generateSshKeypair
+} from "../../ssh-key.js";
 import { defineTool, jsonResult } from "../define-tool.js";
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -15,9 +21,10 @@ export const controllerRequestVmTool = defineTool({
     description:
       "Start one VM instance from a template on the Anka Build Cloud Controller, wait " +
       "until it is running and reachable over SSH, and return the connection details " +
-      "(host, forwarded SSH port, username, password). The template must have port " +
-      "forwarding for the SSH guest port (default 22), or set addSshPortForward to add it. " +
-      "The agent then opens the SSH connection itself.",
+      "(host, forwarded SSH port, username, private key path, ssh command). A temporary " +
+      "ed25519 key is generated and installed on the VM via the controller startup_script. " +
+      "The template must have port forwarding for the SSH guest port (default 22), or set " +
+      "addSshPortForward to add it. The agent then opens the SSH connection itself.",
     inputSchema: {
       vmid: z.string().min(1).describe("UUID of the template to start (from controller_list_templates)."),
       tag: z.string().optional().describe("Optional template tag. Defaults to the latest tag."),
@@ -29,12 +36,24 @@ export const controllerRequestVmTool = defineTool({
       addSshPortForward: z
         .boolean()
         .optional()
-        .describe("Add an SSH port-forward rule even if the template lacks one. Defaults to false.")
+        .describe(
+          "Add an SSH port-forward rule even if the template lacks one. Defaults to true."
+        )
     },
     annotations: { title: "Request a VM from the controller", openWorldHint: true }
   },
-  handler: async ({ vmid, tag, name, externalId, addSshPortForward }) => {
-    const instanceId = await controller.startVm({ vmid, tag, name, externalId, addSshPortForward });
+  handler: async ({ vmid, tag, name, externalId, addSshPortForward = true }) => {
+    const { privateKeyPath, publicKey } = await generateSshKeypair();
+    const startupScript = encodeStartupScript(buildAuthorizedKeysStartupScript(publicKey));
+
+    const instanceId = await controller.startVm({
+      vmid,
+      tag,
+      name,
+      externalId,
+      addSshPortForward,
+      startupScript
+    });
 
     const deadline = Date.now() + config.controllerStartTimeoutMs;
     let instance: Instance | undefined;
@@ -43,10 +62,20 @@ export const controllerRequestVmTool = defineTool({
       instance = await controller.getVm(instanceId);
 
       if (isSshReady(instance)) {
+        const endpoint = extractSshEndpoint(instance.vminfo)!;
         return jsonResult({
           instance_id: instanceId,
           instance_state: instance.instance_state,
-          ssh: extractSsh(instance.vminfo)
+          ssh: {
+            ...endpoint,
+            private_key_path: privateKeyPath,
+            command: buildSshCommand({
+              privateKeyPath,
+              host: endpoint.host,
+              port: endpoint.port,
+              user: endpoint.username
+            })
+          }
         });
       }
 

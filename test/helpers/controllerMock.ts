@@ -12,16 +12,40 @@ export interface MockController {
   url: string;
   /** Calls received, for assertions. */
   calls: { method: string; path: string }[];
+  /** Parsed JSON bodies from POST /api/v1/vm start requests. */
+  startPayloads: Record<string, unknown>[];
   close: () => Promise<void>;
+}
+
+function readJsonBody(req: http.IncomingMessage): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    let data = "";
+    req.on("data", (chunk) => {
+      data += chunk;
+    });
+    req.on("end", () => {
+      if (!data.trim()) {
+        resolve(undefined);
+        return;
+      }
+      try {
+        resolve(JSON.parse(data));
+      } catch (error) {
+        reject(error);
+      }
+    });
+    req.on("error", reject);
+  });
 }
 
 /** Start an in-process mock of the Anka Build Cloud Controller API. */
 export async function startMockController(options: MockControllerOptions = {}): Promise<MockController> {
   const readyAfter = options.readyAfter ?? 1;
   const calls: { method: string; path: string }[] = [];
+  const startPayloads: Record<string, unknown>[] = [];
   let getCount = 0;
 
-  const server = http.createServer((req, res) => {
+  const server = http.createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://mock");
     calls.push({ method: req.method ?? "GET", path: url.pathname });
     const send = (obj: unknown) => {
@@ -36,6 +60,8 @@ export async function startMockController(options: MockControllerOptions = {}): 
       });
     }
     if (url.pathname === "/api/v1/vm" && req.method === "POST") {
+      const body = (await readJsonBody(req)) as Record<string, unknown>;
+      startPayloads.push(body);
       return send({ status: "OK", body: ["inst-1"] });
     }
     if (url.pathname === "/api/v1/vm" && req.method === "GET") {
@@ -79,6 +105,7 @@ export async function startMockController(options: MockControllerOptions = {}): 
   return {
     url: `http://127.0.0.1:${port}`,
     calls,
+    startPayloads,
     close: () => new Promise<void>((resolve) => server.close(() => resolve()))
   };
 }

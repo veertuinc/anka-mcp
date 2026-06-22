@@ -44,11 +44,10 @@ export interface RegistryTemplate {
   [key: string]: unknown;
 }
 
-export interface SshConnection {
+export interface SshEndpoint {
   host: string;
   port: number;
   username: string;
-  password: string;
 }
 
 export interface StartVmRequest {
@@ -58,6 +57,8 @@ export interface StartVmRequest {
   externalId?: string;
   /** When true, attach an SSH port-forward rule even if the template lacks one. */
   addSshPortForward?: boolean;
+  /** Base64-encoded startup script (controller `startup_script` field). */
+  startupScript?: string;
 }
 
 /** Raised when the controller responds with a non-OK status or a transport error. */
@@ -139,6 +140,10 @@ export class ControllerClient {
         { name: "ssh", guest_port: String(config.vmSshGuestPort) }
       ];
     }
+    if (req.startupScript) {
+      payload.startup_script = req.startupScript;
+      payload.startup_script_condition = 0;
+    }
 
     const body = await this.request<string[]>("POST", "/api/v1/vm", payload);
     const instanceId = body?.[0];
@@ -167,11 +172,11 @@ export class ControllerClient {
 }
 
 /**
- * Pull SSH connection details out of a vminfo object: the forwarded host port
- * for the SSH guest port, plus the configured credentials. Returns undefined
- * when the VM is not yet reachable over SSH.
+ * Pull SSH endpoint details out of a vminfo object: forwarded host port for the
+ * SSH guest port plus the configured username. Returns undefined when the VM is
+ * not yet reachable over SSH.
  */
-export function extractSsh(vminfo: VmInfo | undefined): SshConnection | undefined {
+export function extractSshEndpoint(vminfo: VmInfo | undefined): SshEndpoint | undefined {
   if (!vminfo?.host_ip) return undefined;
   const rule = vminfo.port_forwarding?.find(
     (entry) => entry.guest_port === config.vmSshGuestPort && entry.host_port
@@ -180,8 +185,7 @@ export function extractSsh(vminfo: VmInfo | undefined): SshConnection | undefine
   return {
     host: vminfo.host_ip,
     port: rule.host_port,
-    username: config.vmSshUser,
-    password: config.vmSshPassword
+    username: config.vmSshUser
   };
 }
 
@@ -190,7 +194,7 @@ export function isSshReady(instance: Instance): boolean {
   return (
     instance.instance_state === "Started" &&
     instance.vminfo?.status === "running" &&
-    extractSsh(instance.vminfo) !== undefined
+    extractSshEndpoint(instance.vminfo) !== undefined
   );
 }
 

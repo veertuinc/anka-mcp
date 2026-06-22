@@ -42,18 +42,20 @@ describe("controller backend e2e", () => {
     expect(res.data.templates).toEqual([{ id: "tmpl-1", name: "14.5-arm64", arch: "arm64" }]);
   });
 
-  it("requests a VM and returns only SSH connection details", async () => {
+  it("requests a VM and returns SSH key connection details", async () => {
     const client = await startWith({ readyAfter: 2 });
     const res = await client.call("controller_request_vm", { vmid: "tmpl-1" });
     expect(res.isError).toBe(false);
     expect(res.data).not.toHaveProperty("vminfo");
     expect(res.data.instance_id).toBe("inst-1");
-    expect(res.data.ssh).toEqual({
-      host: "10.0.0.5",
-      port: 10005,
-      username: "anka",
-      password: "admin"
-    });
+    expect(res.data.ssh.host).toBe("10.0.0.5");
+    expect(res.data.ssh.port).toBe(10005);
+    expect(res.data.ssh.username).toBe("anka");
+    expect(res.data.ssh.private_key_path).toContain("id_ed25519");
+    expect(res.data.ssh.command).toMatch(/ssh -i .+ -p 10005 .*@10\.0\.0\.5/);
+    expect(mock!.startPayloads[0].startup_script).toBeTruthy();
+    const script = Buffer.from(String(mock!.startPayloads[0].startup_script), "base64").toString("utf8");
+    expect(script).toContain("authorized_keys");
   });
 
   it("reports a terminal state as an error", async () => {

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { controller, extractSsh } from "../../controller.js";
+import { controller, extractSshEndpoint } from "../../controller.js";
 import { defineTool, jsonResult } from "../define-tool.js";
 
 export const controllerGetVmTool = defineTool({
@@ -7,8 +7,9 @@ export const controllerGetVmTool = defineTool({
   config: {
     title: "Get controller VM status",
     description:
-      "Get the current state of a controller VM instance, including SSH connection " +
-      "details (host, forwarded port, username, password) once it is reachable.",
+      "Get the current state of a controller VM instance, including SSH endpoint " +
+      "details (host, forwarded port, username) once it is reachable. Use the private " +
+      "key returned by controller_request_vm to connect.",
     inputSchema: {
       instance_id: z.string().min(1).describe("The instance id returned by controller_request_vm.")
     },
@@ -20,7 +21,7 @@ export const controllerGetVmTool = defineTool({
       instance_id,
       instance_state: instance.instance_state,
       vm_status: instance.vminfo?.status ?? null,
-      ssh: extractSsh(instance.vminfo) ?? null
+      ssh: extractSshEndpoint(instance.vminfo) ?? null
     });
   }
 });

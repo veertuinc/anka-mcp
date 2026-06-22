@@ -40,14 +40,14 @@ MCP_ALLOW_NO_AUTH=1 npm run dev
 
 ## Use-case 1: Controller fleet
 
-The agent asks the MCP server for a VM; the server starts it on the controller, waits until it is running and SSH-reachable, and returns the host IP and forwarded SSH port plus credentials. The agent then SSHes in itself.
+The agent asks the MCP server for a VM; the server generates a temporary SSH key, passes it to the VM via the controller `startup_script`, waits until the instance is running and SSH-reachable, and returns the host IP, forwarded SSH port, private key path, and a ready-to-use `ssh` command. The agent then SSHes in itself.
 
 ```mermaid
 flowchart LR
   agent["AI agent"] -->|"controller_request_vm {vmid}"| mcp["anka-mcp"]
   mcp -->|"POST /api/v1/vm"| ctl["Controller API"]
   mcp -->|"poll GET /api/v1/vm?id="| ctl
-  mcp -->|"{host, port, username, password}"| agent
+  mcp -->|"{host, port, username, private_key_path, command}"| agent
   agent -->|"ssh -p port username@host"| vm["macOS VM"]
 ```
 
@@ -118,7 +118,7 @@ For production, terminate TLS in front of this server so the bearer token and an
 ### Controller
 
 - `controller_list_templates` - list registry templates (`id`, `name`, `arch`) to find a `vmid`.
-- `controller_request_vm` `{ vmid, tag?, name?, externalId?, addSshPortForward? }` - start one VM, wait until SSH-ready, return `{ instance_id, ssh: { host, port, username, password }, vminfo }`.
+- `controller_request_vm` `{ vmid, tag?, name?, externalId?, addSshPortForward? }` - start one VM, install a temporary SSH key via the controller `startup_script`, wait until SSH-ready, return `{ instance_id, ssh: { host, port, username, private_key_path, command } }`.
 - `controller_get_vm` `{ instance_id }` - current state and SSH details for an existing instance.
 - `controller_terminate_vm` `{ instance_id }` - terminate an instance.
 
