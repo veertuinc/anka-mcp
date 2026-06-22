@@ -1,4 +1,5 @@
 import { config } from "./config.js";
+import { logControllerRequest } from "./log.js";
 
 /** Standard response envelope returned by the Controller API. */
 interface ControllerEnvelope<T> {
@@ -91,7 +92,9 @@ export class ControllerClient {
         body: body === undefined ? undefined : JSON.stringify(body)
       });
     } catch (error) {
-      throw new ControllerError(`Failed to reach controller at ${this.baseUrl}: ${String(error)}`);
+      const detail = String(error);
+      logControllerRequest(method, path, { ok: false, detail });
+      throw new ControllerError(`Failed to reach controller at ${this.baseUrl}: ${detail}`);
     }
 
     const text = await response.text();
@@ -106,14 +109,16 @@ export class ControllerClient {
 
     if (!response.ok) {
       const detail = envelope?.message || text || `HTTP ${response.status}`;
+      logControllerRequest(method, path, { ok: false, detail });
       throw new ControllerError(`Controller request failed (${method} ${path}): ${detail}`);
     }
     if (envelope && envelope.status && envelope.status !== "OK") {
-      throw new ControllerError(
-        `Controller request failed (${method} ${path}): ${envelope.message || envelope.status}`
-      );
+      const detail = envelope.message || envelope.status;
+      logControllerRequest(method, path, { ok: false, detail });
+      throw new ControllerError(`Controller request failed (${method} ${path}): ${detail}`);
     }
 
+    logControllerRequest(method, path, { ok: true });
     return (envelope ? envelope.body : undefined) as T;
   }
 

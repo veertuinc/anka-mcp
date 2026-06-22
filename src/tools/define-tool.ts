@@ -1,6 +1,7 @@
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { ZodRawShape } from "zod";
+import { logToolCall, logToolError } from "../log.js";
 
 interface ToolConfig<InputArgs extends ZodRawShape> {
   title?: string;
@@ -35,7 +36,18 @@ export function defineTool<InputArgs extends ZodRawShape>(spec: {
   return {
     ...spec,
     register(server: McpServer) {
-      server.registerTool(this.name, this.config, this.handler);
+      const handler = this.handler;
+      const name = this.name;
+      server.registerTool(this.name, this.config, (async (args, extra) => {
+        try {
+          const result = await handler(args, extra);
+          logToolCall(name, args, result);
+          return result;
+        } catch (error) {
+          logToolError(name, args, error);
+          throw error;
+        }
+      }) as ToolCallback<InputArgs>);
     }
   };
 }

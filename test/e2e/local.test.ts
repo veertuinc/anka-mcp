@@ -46,6 +46,10 @@ describe("local backend e2e", () => {
       { name: "base-template", uuid: "uuid-base" },
       { name: "other", uuid: "uuid-other" }
     ]);
+    const logs = srv!.stderr();
+    expect(logs).toMatch(/mcp tools\/call.*local_list_templates/);
+    expect(logs).toMatch(/tool local_list_templates args=\{\}/);
+    expect(logs).toMatch(/anka .* -j list -> ok/);
   });
 
   it("shows only the IP", async () => {

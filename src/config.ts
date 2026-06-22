@@ -12,6 +12,8 @@ export interface AnkaMcpConfig {
   allowNoAuth: boolean;
   /** Allowed Origin header values for DNS-rebinding protection. Empty = unrestricted. */
   allowedOrigins: string[];
+  /** When false, request/tool/backend logging to stderr is suppressed. */
+  logEnabled: boolean;
 
   // --- Local (anka CLI) backend ---
   /** True when the local anka CLI tool set should be exposed. */
@@ -119,6 +121,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AnkaMcpConfig 
     authToken: env.MCP_AUTH_TOKEN?.trim() || "",
     allowNoAuth: parseBoolEnv(env.MCP_ALLOW_NO_AUTH),
     allowedOrigins: parseListEnv(env.MCP_ALLOWED_ORIGINS),
+    logEnabled: !["0", "false", "no", "off"].includes(env.MCP_LOG?.trim().toLowerCase() ?? ""),
 
     localEnabled: resolveLocalEnabled(env.ANKA_LOCAL, ankaBin),
     ankaBin,

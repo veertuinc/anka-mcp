@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import { config } from "./config.js";
+import { logAnkaCommand } from "./log.js";
 
 /**
  * The JSON envelope every `anka -j <command>` call returns, e.g.
@@ -85,7 +86,7 @@ export function runAnka(args: string[], options: RunAnkaOptions = {}): Promise<A
           const failure: ExecFailure = isExecFailure(error)
             ? error
             : { message: String(error) };
-          resolve({
+          const result = {
             ok: false,
             status: envelope?.status,
             body: envelope?.body,
@@ -94,13 +95,17 @@ export function runAnka(args: string[], options: RunAnkaOptions = {}): Promise<A
             args: finalArgs,
             stdout,
             stderr
-          });
+          };
+          logAnkaCommand(finalArgs, { ok: false, message: result.message });
+          resolve(result);
           return;
         }
 
         const status = envelope?.status;
+        const ok = status ? status === "OK" : true;
+        logAnkaCommand(finalArgs, { ok, message: envelope?.message });
         resolve({
-          ok: status ? status === "OK" : true,
+          ok,
           status,
           body: envelope?.body,
           message: envelope?.message,

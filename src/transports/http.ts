@@ -3,6 +3,12 @@ import express, { type NextFunction, type Request, type Response } from "express
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { config } from "../config.js";
+import {
+  clientSourceFromRequest,
+  logMcpRequest,
+  mcpMethodsFromBody,
+  runWithRequestContextAsync
+} from "../log.js";
 import { createServer } from "../server.js";
 
 const SESSION_HEADER = "mcp-session-id";
@@ -56,6 +62,50 @@ function authGuard(req: Request, res: Response, next: NextFunction): void {
   next();
 }
 
+function logIncomingMcpRequest(req: Request): void {
+  const methods = mcpMethodsFromBody(req.body);
+  if (methods.length === 0) return;
+
+  for (const method of methods) {
+    if (method === "tools/call") {
+      const messages = Array.isArray(req.body) ? req.body : [req.body];
+      for (const message of messages) {
+        if (!message || typeof message !== "object" || (message as { method?: string }).method !== "tools/call") {
+          continue;
+        }
+        const params = (message as { params?: { name?: string; arguments?: unknown } }).params;
+        logMcpRequest(method, {
+          tool: params?.name,
+          args: params?.arguments ?? {}
+        });
+      }
+      continue;
+    }
+
+    if (method === "initialize") {
+      const messages = Array.isArray(req.body) ? req.body : [req.body];
+      for (const message of messages) {
+        if (!message || typeof message !== "object" || (message as { method?: string }).method !== "initialize") {
+          continue;
+        }
+        const clientInfo = (message as { params?: { clientInfo?: unknown } }).params?.clientInfo;
+        logMcpRequest(method, clientInfo ? { client: clientInfo } : undefined);
+      }
+      continue;
+    }
+
+    logMcpRequest(method);
+  }
+}
+
+async function withRequestLogging<T>(req: Request, fn: () => Promise<T>): Promise<T> {
+  const source = clientSourceFromRequest(req);
+  return runWithRequestContextAsync({ source }, async () => {
+    logIncomingMcpRequest(req);
+    return fn();
+  });
+}
+
 function assertAuthConfigured(): void {
   if (!config.authToken && !config.allowNoAuth) {
     throw new Error(
@@ -90,51 +140,56 @@ export async function startHttp(): Promise<void> {
   const transports = new Map<string, StreamableHTTPServerTransport>();
 
   app.post("/mcp", originGuard, authGuard, async (req: Request, res: Response) => {
-    const sessionId = req.headers[SESSION_HEADER] as string | undefined;
-    const existing = sessionId ? transports.get(sessionId) : undefined;
+    await withRequestLogging(req, async () => {
+      const sessionId = req.headers[SESSION_HEADER] as string | undefined;
+      const existing = sessionId ? transports.get(sessionId) : undefined;
 
-    if (existing) {
-      await existing.handleRequest(req, res, req.body);
-      return;
-    }
-
-    if (!isInitializeRequest(req.body)) {
-      res.status(400).json({
-        jsonrpc: "2.0",
-        error: { code: -32000, message: "No valid session ID provided" },
-        id: null
-      });
-      return;
-    }
-
-    const transport = new StreamableHTTPServerTransport({
-      sessionIdGenerator: () => randomUUID(),
-      onsessioninitialized: (id) => {
-        transports.set(id, transport);
-      },
-      onsessionclosed: (id) => {
-        transports.delete(id);
+      if (existing) {
+        await existing.handleRequest(req, res, req.body);
+        return;
       }
+
+      if (!isInitializeRequest(req.body)) {
+        res.status(400).json({
+          jsonrpc: "2.0",
+          error: { code: -32000, message: "No valid session ID provided" },
+          id: null
+        });
+        return;
+      }
+
+      const transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: () => randomUUID(),
+        onsessioninitialized: (id) => {
+          transports.set(id, transport);
+        },
+        onsessionclosed: (id) => {
+          transports.delete(id);
+        }
+      });
+
+      transport.onclose = () => {
+        if (transport.sessionId) transports.delete(transport.sessionId);
+      };
+
+      const server = createServer();
+      await server.connect(transport);
+      await transport.handleRequest(req, res, req.body);
     });
-
-    transport.onclose = () => {
-      if (transport.sessionId) transports.delete(transport.sessionId);
-    };
-
-    const server = createServer();
-    await server.connect(transport);
-    await transport.handleRequest(req, res, req.body);
   });
 
   // GET (server-to-client SSE stream) and DELETE (terminate session).
   const handleSessionRequest = async (req: Request, res: Response) => {
-    const sessionId = req.headers[SESSION_HEADER] as string | undefined;
-    const transport = sessionId ? transports.get(sessionId) : undefined;
-    if (!transport) {
-      res.status(400).send("Invalid or missing session ID");
-      return;
-    }
-    await transport.handleRequest(req, res);
+    await withRequestLogging(req, async () => {
+      const sessionId = req.headers[SESSION_HEADER] as string | undefined;
+      const transport = sessionId ? transports.get(sessionId) : undefined;
+      if (!transport) {
+        res.status(400).send("Invalid or missing session ID");
+        return;
+      }
+      logMcpRequest(`${req.method} /mcp`, { session: sessionId });
+      await transport.handleRequest(req, res);
+    });
   };
 
   app.get("/mcp", originGuard, authGuard, handleSessionRequest);

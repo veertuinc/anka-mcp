@@ -45,6 +45,11 @@ describe("loadConfig", () => {
     expect(c.allowedOrigins).toEqual(["https://a.com", "https://b.com"]);
   });
 
+  it("enables logging by default and allows disabling it", () => {
+    expect(loadConfig(base).logEnabled).toBe(true);
+    expect(loadConfig({ ...base, MCP_LOG: "off" }).logEnabled).toBe(false);
+  });
+
   it("honors overridden VM SSH defaults and guest port", () => {
     const c = loadConfig({ ...base, ANKA_VM_SSH_USER: "dev", ANKA_VM_SSH_GUEST_PORT: "2222" });
     expect(c.vmSshUser).toBe("dev");
