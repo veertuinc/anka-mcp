@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { startMockController, type MockController } from "../helpers/controllerMock.js";
+import { TEST_PUBLIC_KEY_BASE64 } from "../helpers/ssh-fixtures.js";
 import {
   adminClient,
   connect,
@@ -26,7 +27,6 @@ async function startAdminServer(extraEnv: Record<string, string> = {}) {
     ANKA_CONTROLLER_URL: mock.url,
     ANKA_CONTROLLER_POLL_INTERVAL_MS: "50",
     ANKA_CONTROLLER_START_TIMEOUT_MS: "5000",
-    ANKA_CONTROLLER_SSH_PROBE: "0",
     ...extraEnv
   });
   return { admin: adminClient(srv.baseUrl, "admin-secret"), baseUrl: srv.baseUrl, mock };
@@ -59,7 +59,10 @@ describe("admin token API", () => {
     const created = await admin.createToken("team-a");
     const client = await connect(baseUrl, created.body.token);
 
-    const started = await client.call("controller_request_vm", { vmid: "tmpl-1" });
+    const started = await client.call("controller_request_vm", {
+      vmid: "tmpl-1",
+      ssh_public_key_base64: TEST_PUBLIC_KEY_BASE64
+    });
     expect(started.isError).toBe(false);
     expect(started.data.instance_id).toBe("inst-1");
 

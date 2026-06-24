@@ -3,6 +3,10 @@ import { chmodSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { startServer, connect, FAKE_ANKA, type RunningServer } from "../helpers/mcp.js";
+import { TEST_PUBLIC_KEY_BASE64 } from "../helpers/ssh-fixtures.js";
+
+const TEST_PUBLIC_KEY_LINE =
+  "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleKeyForTests anka-mcp-test";
 
 beforeAll(() => {
   chmodSync(FAKE_ANKA, 0o755);
@@ -140,29 +144,45 @@ describe("local backend e2e", () => {
       FAKE_ANKA_COUNT_FILE: counter,
       ANKA_LOCAL_POLL_INTERVAL_MS: "20"
     });
-    const res = await client.call("local_ssh_access", { name: "sshvm" });
+    const res = await client.call("local_ssh_access", {
+      name: "sshvm",
+      ssh_public_key_base64: TEST_PUBLIC_KEY_BASE64
+    });
     expect(res.isError).toBe(false);
     expect(res.data).toMatchObject({ ok: true, ip: "192.168.64.50" });
   });
 
-  it("provisions SSH access by installing a temporary key", async () => {
+  it("returns SSH key instructions when ssh_public_key_base64 is omitted", async () => {
+    const client = await start({ FAKE_ANKA_RUNNING_VM: "sshvm" });
+    const res = await client.call("local_ssh_access", { name: "sshvm" });
+    expect(res.isError).toBe(true);
+    expect(res.data.error).toMatch(/ssh_public_key_base64 is required/i);
+    expect(res.data.ssh_key_instructions).toMatch(/ssh-keygen -t ed25519/i);
+  });
+
+  it("provisions SSH access by installing the caller public key", async () => {
     const log = join(mkdtempSync(join(tmpdir(), "fake-anka-log-")), "calls.log");
     const client = await start({ FAKE_ANKA_RUNNING_VM: "sshvm", FAKE_ANKA_LOG: log });
 
-    const res = await client.call("local_ssh_access", { name: "sshvm" });
+    const res = await client.call("local_ssh_access", {
+      name: "sshvm",
+      ssh_public_key_base64: TEST_PUBLIC_KEY_BASE64
+    });
     expect(res.isError).toBe(false);
     expect(res.data).toMatchObject({ ok: true, ip: "192.168.64.50", port: 22, user: "anka" });
-    expect(res.data.private_key_path).toContain("id_ed25519");
-    expect(res.data.command).toMatch(/^ssh -i .* anka@192\.168\.64\.50$/);
+    expect(res.data).not.toHaveProperty("private_key");
 
     const calls = readFileSync(log, "utf8");
-    expect(calls).toMatch(/"cp"/);
     expect(calls).toMatch(/"run"/);
+    expect(calls).toMatch(/authorized_keys/);
   });
 
   it("refuses SSH access for a VM that is not running", async () => {
     const client = await start();
-    const res = await client.call("local_ssh_access", { name: "base-template" });
+    const res = await client.call("local_ssh_access", {
+      name: "base-template",
+      ssh_public_key_base64: TEST_PUBLIC_KEY_BASE64
+    });
     expect(res.isError).toBe(true);
     expect(res.data.error).toMatch(/not running/i);
   });

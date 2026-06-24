@@ -1,50 +1,49 @@
 import { describe, it, expect } from "vitest";
 import {
   buildAuthorizedKeysStartupScript,
-  buildSshCommand,
+  decodeSshPublicKeyBase64,
   encodeStartupScript,
-  probeSshAuth
+  SSH_PUBLIC_KEY_INSTRUCTIONS
 } from "../../src/ssh-key.js";
 
-describe("buildAuthorizedKeysStartupScript", () => {
-  it("installs the public key into authorized_keys", () => {
-    const publicKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleKey anka-mcp";
-    const script = buildAuthorizedKeysStartupScript(publicKey);
-    expect(script).toContain("mkdir -p ~/.ssh");
-    expect(script).toContain(publicKey);
-    expect(script).toContain("authorized_keys");
+const TEST_PUBLIC_KEY_LINE =
+  "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleKeyForTests anka-mcp-test";
+const TEST_PUBLIC_KEY_BASE64 = Buffer.from(TEST_PUBLIC_KEY_LINE, "utf8").toString("base64");
+
+describe("decodeSshPublicKeyBase64", () => {
+  it("decodes a valid OpenSSH public key line", () => {
+    expect(decodeSshPublicKeyBase64(TEST_PUBLIC_KEY_BASE64)).toBe(TEST_PUBLIC_KEY_LINE);
   });
 
-  it("base64-encodes for the controller startup_script field", () => {
-    const script = buildAuthorizedKeysStartupScript("ssh-ed25519 AAA test");
-    const encoded = encodeStartupScript(script);
-    expect(Buffer.from(encoded, "base64").toString("utf8")).toBe(script);
+  it("rejects invalid base64 content", () => {
+    expect(() => decodeSshPublicKeyBase64("!!!")).toThrow(/valid base64|OpenSSH public key/i);
   });
-});
 
-describe("buildSshCommand", () => {
-  it("uses only the MCP key, ignoring ssh-agent identities", () => {
-    const command = buildSshCommand({
-      privateKeyPath: "/tmp/anka-mcp-ssh-abc/id_ed25519",
-      host: "10.0.0.5",
-      port: 10005,
-      user: "anka"
-    });
-    expect(command).toContain("-o IdentitiesOnly=yes");
-    expect(command).toMatch(
-      /^ssh -i \/tmp\/anka-mcp-ssh-abc\/id_ed25519 -p 10005 .* anka@10\.0\.0\.5$/
+  it("rejects decoded content that is not an OpenSSH public key line", () => {
+    expect(() => decodeSshPublicKeyBase64(Buffer.from("hello", "utf8").toString("base64"))).toThrow(
+      /OpenSSH public key/i
     );
   });
 });
 
-describe("probeSshAuth", () => {
-  it("returns false when SSH cannot connect or authenticate", async () => {
-    const result = await probeSshAuth({
-      privateKeyPath: "/tmp/anka-mcp-nonexistent-key",
-      host: "127.0.0.1",
-      port: 1,
-      user: "anka"
-    });
-    expect(result).toBe(false);
+describe("SSH_PUBLIC_KEY_INSTRUCTIONS", () => {
+  it("documents key generation and how to pass ssh_public_key_base64", () => {
+    expect(SSH_PUBLIC_KEY_INSTRUCTIONS).toMatch(/ssh-keygen -t ed25519/i);
+    expect(SSH_PUBLIC_KEY_INSTRUCTIONS).toMatch(/ssh_public_key_base64/i);
+  });
+});
+
+describe("buildAuthorizedKeysStartupScript", () => {
+  it("installs the public key into authorized_keys", () => {
+    const script = buildAuthorizedKeysStartupScript(TEST_PUBLIC_KEY_LINE);
+    expect(script).toContain("mkdir -p ~/.ssh");
+    expect(script).toContain(TEST_PUBLIC_KEY_LINE);
+    expect(script).toContain("authorized_keys");
+  });
+
+  it("base64-encodes for the controller startup_script field", () => {
+    const script = buildAuthorizedKeysStartupScript(TEST_PUBLIC_KEY_LINE);
+    const encoded = encodeStartupScript(script);
+    expect(Buffer.from(encoded, "base64").toString("utf8")).toBe(script);
   });
 });

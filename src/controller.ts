@@ -190,6 +190,39 @@ export function extractSshEndpoint(vminfo: VmInfo | undefined): SshEndpoint | un
   };
 }
 
+/** Recommended interval for polling controller_get_vm while a VM is provisioning. */
+export const CONTROLLER_STATUS_POLL_INTERVAL_SECONDS = 30;
+
+/** Instance states where provisioning is in progress and SSH is not yet available. */
+export const PENDING_CONTROLLER_STATES = new Set(["Pulling", "Scheduling", "Deploying"]);
+
+/** True when the controller is still provisioning the instance (e.g. pulling a template). */
+export function isPendingControllerState(state: string | undefined): boolean {
+  return !!state && PENDING_CONTROLLER_STATES.has(state);
+}
+
+/** True when controller_request_vm should stop waiting and return pending immediately. */
+export function shouldReturnPendingFromRequest(state: string | undefined): boolean {
+  return state === "Pulling";
+}
+
+/** Agent-facing guidance for polling controller_get_vm during provisioning. */
+export function controllerStatusPollMessage(state: string | undefined): string {
+  const label = state ?? "unknown";
+  if (state === "Pulling") {
+    return (
+      `Template image is being pulled on the target node (instance_state: ${label}). ` +
+      `Call controller_get_vm with this instance_id every ${CONTROLLER_STATUS_POLL_INTERVAL_SECONDS} seconds ` +
+      `until instance_state is Started and ssh is available.`
+    );
+  }
+  return (
+    `Instance provisioning is still in progress (instance_state: ${label}). ` +
+    `Call controller_get_vm with this instance_id every ${CONTROLLER_STATUS_POLL_INTERVAL_SECONDS} seconds ` +
+    `until instance_state is Started and ssh is available.`
+  );
+}
+
 /** True once the controller reports a started VM with a forwarded SSH port. */
 export function isSshReady(instance: Instance): boolean {
   return (

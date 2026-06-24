@@ -1,38 +1,43 @@
-import { execFile } from "node:child_process";
-import { mkdtemp, readFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { promisify } from "node:util";
+/** Instructions returned when the caller omits ssh_public_key_base64. */
+export const SSH_PUBLIC_KEY_INSTRUCTIONS =
+  "Create an ed25519 keypair on the agent machine:\n" +
+  '  ssh-keygen -t ed25519 -N "" -C "anka-vm" -f ./anka_vm_key\n' +
+  "Base64-encode the single-line public key file:\n" +
+  "  Linux: base64 -w0 < ./anka_vm_key.pub\n" +
+  "  macOS: base64 < ./anka_vm_key.pub | tr -d '\\n'\n" +
+  "Pass the result as ssh_public_key_base64 to controller_request_vm.\n" +
+  "Once the VM is ready, SSH in with the matching private key:\n" +
+  "  ssh -i ./anka_vm_key -p <port> -o IdentitiesOnly=yes -o StrictHostKeyChecking=no <username>@<host>";
 
-const execFileAsync = promisify(execFile);
+const OPENSSH_PUBLIC_KEY_LINE =
+  /^ssh-(?:ed25519|rsa|ecdsa-sha2-nistp256|ecdsa-sha2-nistp384|ecdsa-sha2-nistp521) [A-Za-z0-9+/]+=*(?: .+)?$/;
 
-export interface SshKeypair {
-  privateKeyPath: string;
-  publicKey: string;
+/** Decode and validate a base64-encoded OpenSSH public key line. */
+export function decodeSshPublicKeyBase64(encoded: string): string {
+  const trimmed = encoded.trim();
+  if (!trimmed) {
+    throw new Error("ssh_public_key_base64 must not be empty");
+  }
+
+  let decoded: string;
+  try {
+    decoded = Buffer.from(trimmed, "base64").toString("utf8").trim();
+  } catch {
+    throw new Error("ssh_public_key_base64 is not valid base64");
+  }
+
+  if (!OPENSSH_PUBLIC_KEY_LINE.test(decoded)) {
+    throw new Error(
+      "Decoded ssh_public_key_base64 must be an OpenSSH public key line (for example ssh-ed25519 AAAA... comment)"
+    );
+  }
+
+  return decoded;
 }
 
-/** Generate a throwaway ed25519 keypair in a temp dir. */
-export async function generateSshKeypair(): Promise<SshKeypair> {
-  const dir = await mkdtemp(join(tmpdir(), "anka-mcp-ssh-"));
-  const privateKeyPath = join(dir, "id_ed25519");
-  await execFileAsync("ssh-keygen", [
-    "-t",
-    "ed25519",
-    "-N",
-    "",
-    "-C",
-    "anka-mcp",
-    "-f",
-    privateKeyPath,
-    "-q"
-  ]);
-  const publicKey = (await readFile(`${privateKeyPath}.pub`, "utf8")).trim();
-  return { privateKeyPath, publicKey };
-}
-
-/** Shell script that installs `publicKey` into ~/.ssh/authorized_keys. */
-export function buildAuthorizedKeysStartupScript(publicKey: string): string {
-  const escaped = publicKey.replace(/\\/g, "\\\\").replace(/'/g, "'\\''");
+/** Shell script that installs `publicKeyLine` into ~/.ssh/authorized_keys. */
+export function buildAuthorizedKeysStartupScript(publicKeyLine: string): string {
+  const escaped = publicKeyLine.replace(/\\/g, "\\\\").replace(/'/g, "'\\''");
   return (
     "set -e; " +
     "mkdir -p ~/.ssh; chmod 700 ~/.ssh; " +
@@ -44,58 +49,4 @@ export function buildAuthorizedKeysStartupScript(publicKey: string): string {
 /** Base64-encode a startup script for the controller API `startup_script` field. */
 export function encodeStartupScript(script: string): string {
   return Buffer.from(script, "utf8").toString("base64");
-}
-
-export function buildSshCommand(options: {
-  privateKeyPath: string;
-  host: string;
-  port: number;
-  user: string;
-}): string {
-  return (
-    `ssh -i ${options.privateKeyPath} -p ${options.port} ` +
-    `-o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ` +
-    `${options.user}@${options.host}`
-  );
-}
-
-const SSH_PROBE_CONNECT_TIMEOUT_SECONDS = 5;
-
-/** Verify the MCP key can authenticate over the forwarded SSH port. */
-export async function probeSshAuth(options: {
-  privateKeyPath: string;
-  host: string;
-  port: number;
-  user: string;
-}): Promise<boolean> {
-  try {
-    await execFileAsync(
-      "ssh",
-      [
-        "-i",
-        options.privateKeyPath,
-        "-p",
-        String(options.port),
-        "-o",
-        "IdentitiesOnly=yes",
-        "-o",
-        "StrictHostKeyChecking=no",
-        "-o",
-        "UserKnownHostsFile=/dev/null",
-        "-o",
-        "BatchMode=yes",
-        "-o",
-        `ConnectTimeout=${SSH_PROBE_CONNECT_TIMEOUT_SECONDS}`,
-        `${options.user}@${options.host}`,
-        "true"
-      ],
-      {
-        timeout: (SSH_PROBE_CONNECT_TIMEOUT_SECONDS + 5) * 1000,
-        env: { ...process.env, SSH_AUTH_SOCK: "" }
-      }
-    );
-    return true;
-  } catch {
-    return false;
-  }
 }

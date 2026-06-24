@@ -1,7 +1,8 @@
-import { controller, extractSshEndpoint } from "../../controller.js";
-import { optionalBoundedString, uuidLike } from "../../security/schemas.js";
+import { controller } from "../../controller.js";
+import { uuidLike } from "../../security/schemas.js";
 import { requireControllerInstanceAccess } from "../../tokens/ownership.js";
 import { defineTool, jsonResult } from "../define-tool.js";
+import { controllerVmStatusFields } from "./status.js";
 import { runControllerTool } from "./results.js";
 
 export const controllerGetVmTool = defineTool({
@@ -9,9 +10,10 @@ export const controllerGetVmTool = defineTool({
   config: {
     title: "Get controller VM status",
     description:
-      "Get the current state of a controller VM instance, including SSH endpoint " +
-      "details (host, forwarded port, username) once it is reachable. Use the private " +
-      "key returned by controller_request_vm to connect.",
+      "Get the current state of a controller VM instance. When SSH-ready, returns " +
+      "host, forwarded port, and username. Connect with the private key matching " +
+      "the ssh_public_key_base64 you passed to controller_request_vm. While " +
+      "provisioning, returns status pending with guidance to poll every 30 seconds.",
     inputSchema: {
       instance_id: uuidLike.describe("The instance id returned by controller_request_vm.")
     },
@@ -25,11 +27,6 @@ export const controllerGetVmTool = defineTool({
         return jsonResult({ ok: false, error: "Instance not owned by this credential" }, true);
       }
       const instance = await controller.getVm(instance_id);
-      return jsonResult({
-        instance_id,
-        instance_state: instance.instance_state,
-        vm_status: instance.vminfo?.status ?? null,
-        ssh: extractSshEndpoint(instance.vminfo) ?? null
-      });
+      return jsonResult(controllerVmStatusFields(instance_id, instance));
     })
 });

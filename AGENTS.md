@@ -11,9 +11,10 @@ MCP tool results are fed straight into an agent's context, so every field costs 
   - `local_list_templates` -> `{ name, uuid }` per VM only.
   - `local_show_vm` -> `{ ip }` only.
   - `controller_list_templates` -> `{ id, name, arch }` per template.
-  - `controller_request_vm` / `controller_get_vm` -> instance state plus `ssh: { host, port, username, private_key_path, command }` for request (get_vm omits the key fields); do not echo the full `vminfo`.
-- Use the returned `command` as-is (it sets `-o IdentitiesOnly=yes`). If you construct SSH yourself, use that flag or `SSH_AUTH_SOCK=` so a local ssh-agent does not override the MCP-provided key.
-- `controller_request_vm` already verifies SSH auth before returning; you should not need an immediate retry after a successful response.
+  - `controller_request_vm` / `controller_get_vm` -> when SSH-ready: `{ instance_id, status: "ready", ssh: { host, port, username } }`; while provisioning: `{ status: "pending", ssh: null, message }`; if `ssh_public_key_base64` is omitted: `{ error, ssh_key_instructions }`; do not echo the full `vminfo`.
+  - `local_ssh_access` -> `{ ok, ip, port, user }` after installing the caller's public key.
+- The agent generates and keeps the SSH **private** key locally. Pass only a base64-encoded **public** key line as `ssh_public_key_base64`. Never expect the MCP server to return private key material.
+- If `controller_request_vm` or `local_ssh_access` returns `ssh_key_instructions`, follow them to create a keypair and retry with `ssh_public_key_base64`.
 - On failure, return `{ ok: false, error }` (or throw a clear `Error`) with a concise message. Do not dump verbose command output.
 - On success for action tools, return `{ ok: true, ... }` with just the identifying fields (e.g. the VM `name`).
 

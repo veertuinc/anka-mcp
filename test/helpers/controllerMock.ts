@@ -6,6 +6,10 @@ export interface MockControllerOptions {
   readyAfter?: number;
   /** Terminal state to report instead of becoming ready (e.g. "Error"). */
   failWithState?: string;
+  /** Pending instance_state to report until readyAfter polls (default: "Scheduling"). */
+  pendingState?: string;
+  /** Fixed instance_state for every GET poll (e.g. "Pulling"). */
+  fixedState?: string;
 }
 
 export interface MockController {
@@ -72,8 +76,26 @@ export async function startMockController(options: MockControllerOptions = {}): 
       if (options.failWithState) {
         return send({ status: "OK", body: { instance_id: "inst-1", instance_state: options.failWithState, vminfo: { status: "error" } } });
       }
+      if (options.fixedState) {
+        return send({
+          status: "OK",
+          body: {
+            instance_id: "inst-1",
+            instance_state: options.fixedState,
+            vminfo: { status: options.fixedState.toLowerCase() }
+          }
+        });
+      }
       if (getCount < readyAfter) {
-        return send({ status: "OK", body: { instance_id: "inst-1", instance_state: "Scheduling", vminfo: { status: "scheduling" } } });
+        const pendingState = options.pendingState ?? "Scheduling";
+        return send({
+          status: "OK",
+          body: {
+            instance_id: "inst-1",
+            instance_state: pendingState,
+            vminfo: { status: pendingState.toLowerCase() }
+          }
+        });
       }
       return send({
         status: "OK",

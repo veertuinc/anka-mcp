@@ -77,24 +77,36 @@ MCP_ALLOW_NO_AUTH=1 npm run dev
 
 ## Use-case 1: Controller fleet
 
-The agent asks the MCP server for a VM; the server generates a temporary SSH key, passes it to the VM via the controller `startup_script` (with `startup_script_condition: 1` so the script runs immediately, before networking), waits until the controller reports the instance started and an SSH auth probe with that key succeeds over the forwarded port, then returns the host IP, forwarded SSH port, private key path, and a ready-to-use `ssh` command. The agent then SSHes in itself.
+The agent generates an SSH keypair locally and passes a base64-encoded OpenSSH public key line as `ssh_public_key_base64` to `controller_request_vm`. The MCP server installs that key on the VM via the controller `startup_script`, polls until the instance is Started with a forwarded SSH port, then returns `{ host, port, username }`. The agent connects with its private key. If `ssh_public_key_base64` is omitted, the tool returns `ssh_key_instructions` instead of starting a VM.
 
 ```mermaid
 flowchart LR
-  agent["AI agent"] -->|"controller_request_vm {vmid}"| mcp["anka-mcp"]
+  agent["AI agent"] -->|"controller_request_vm {vmid, ssh_public_key_base64}"| mcp["anka-mcp"]
   mcp -->|"POST /api/v1/vm"| ctl["Controller API"]
   mcp -->|"poll GET /api/v1/vm?id="| ctl
-  mcp -->|"{host, port, username, private_key_path, command}"| agent
-  agent -->|"ssh -p port username@host"| vm["macOS VM"]
+  mcp -->|"{host, port, username}"| agent
+  agent -->|"ssh -i local private key"| vm["macOS VM"]
 ```
 
 The VM template must expose port forwarding for the SSH guest port (default `22`, e.g. a `port-forward-22` tag), or pass `addSshPortForward: true` to `controller_request_vm` to add a rule at start time.
+
+### Agent SSH key workflow
+
+```bash
+ssh-keygen -t ed25519 -N "" -C "anka-vm" -f ./anka_vm_key
+# Linux:
+base64 -w0 < ./anka_vm_key.pub
+# macOS:
+base64 < ./anka_vm_key.pub | tr -d '\n'
+# Pass the output as ssh_public_key_base64, then once ready:
+ssh -i ./anka_vm_key -p <port> -o IdentitiesOnly=yes -o StrictHostKeyChecking=no anka@<host>
+```
 
 ## Use-case 2: Local laptop
 
 The agent manages VMs on the developer's own machine through a limited command set: list templates, start (which always clones the chosen template into a fresh VM so the original is never touched), show, prepare SSH access, delete. A running-VM limit (default 2) prevents exceeding the local Anka concurrency limit. The delete tool always requires a specific VM name and can never delete all VMs.
 
-For SSH, `local_ssh_access` generates a throwaway ed25519 keypair on the host, copies the public key into the running VM with `anka cp`, installs it into the VM's `~/.ssh/authorized_keys` (via `anka run`), and returns the private key path plus a ready-to-use `ssh` command. The agent (on the same machine) then connects directly to the VM's shared-network IP. The VM template must have Remote Login (sshd) enabled.
+For SSH, `local_ssh_access` installs the caller's base64-encoded public key into the running VM's `~/.ssh/authorized_keys` (via `anka run`) and returns `{ ip, port, user }`. The VM template must have Remote Login (sshd) enabled.
 
 ## Configuration
 
@@ -137,7 +149,6 @@ anka-mcp: 2026-06-22T16:52:15.059Z [127.0.0.1 (Cursor/1.x)] tool local_list_temp
 | `ANKA_CONTROLLER_TLS_INSECURE`    | `false`  | Set to `1` to skip TLS certificate verification.                   |
 | `ANKA_CONTROLLER_POLL_INTERVAL_MS`| `3000`   | Interval between instance-status polls.                            |
 | `ANKA_CONTROLLER_START_TIMEOUT_MS`| `180000` | Max time to wait for a VM to become SSH-ready.                     |
-| `ANKA_CONTROLLER_SSH_PROBE`       | `on`     | When enabled, `controller_request_vm` runs an SSH auth probe with the generated key before returning (set to `0` to skip). |
 
 ### Local backend
 
@@ -158,9 +169,9 @@ anka-mcp: 2026-06-22T16:52:15.059Z [127.0.0.1 (Cursor/1.x)] tool local_list_temp
 | `ANKA_VM_SSH_PASSWORD`| `admin` | Password returned for SSHing into a VM.              |
 | `ANKA_VM_SSH_GUEST_PORT` | `22` | Guest port that maps to SSH (matched in port forwarding). |
 
-Returned `ssh` commands include `-o IdentitiesOnly=yes` so a local ssh-agent does not offer other keys and cause auth failures. If you build your own command, use that flag or prefix with `SSH_AUTH_SOCK=` to disable the agent.
+The MCP server never generates or stores SSH private keys. The agent creates a keypair locally, passes the base64-encoded public key line to `controller_request_vm` or `local_ssh_access`, and connects with the matching private key once the endpoint is ready.
 
-For production, terminate TLS in front of this server so the bearer token and any returned credentials are not sent in cleartext.
+For production, terminate TLS in front of this server so the bearer token is not sent in cleartext.
 
 See [SECURITY.md](SECURITY.md) for the full operator security guide.
 
@@ -199,8 +210,8 @@ Back up `anka-mcp.db` for disaster recovery; it is created automatically on firs
 ### Controller
 
 - `controller_list_templates` - list registry templates (`id`, `name`, `arch`) to find a `vmid`.
-- `controller_request_vm` `{ vmid, tag?, name?, externalId?, addSshPortForward? }` - start one VM, install a temporary SSH key via the controller `startup_script`, wait until SSH auth succeeds over the forwarded port, return `{ instance_id, ssh: { host, port, username, private_key_path, command } }`. The controller `external_id` is auto-filled with MCP client, IP, user-agent, session, and credential id; pass `externalId` to append a custom `ref`.
-- `controller_get_vm` `{ instance_id }` - current state and SSH details for an existing instance (must be owned by the caller's token).
+- `controller_request_vm` `{ vmid, ssh_public_key_base64, tag?, name?, externalId?, addSshPortForward? }` - start one VM and install the caller's SSH public key via `startup_script`. Requires `ssh_public_key_base64` (base64 of a single-line OpenSSH public key). If omitted, returns `{ error, ssh_key_instructions }` without starting a VM. When SSH-ready: `{ instance_id, status: "ready", ssh: { host, port, username } }`. While pulling: `{ status: "pending", ssh: null, message }` — poll `controller_get_vm` every 30 seconds.
+- `controller_get_vm` `{ instance_id }` - current state for an owned instance. When SSH-ready, returns `{ status: "ready", ssh: { host, port, username } }`.
 - `controller_terminate_vm` `{ instance_id }` - terminate an instance (must be owned by the caller's token).
 
 ### Local
@@ -208,7 +219,7 @@ Back up `anka-mcp.db` for disaster recovery; it is created automatically on firs
 - `local_list_templates` - list the local VM library to find a template to clone from.
 - `local_start_vm` `{ template, name?, wait?, timeoutSeconds? }` - clone the given template into a fresh, disposable VM and start it. The original template is never started or modified. `name` defaults to an auto-generated name (`mcp-<id>`). Subject to the running-VM limit. By default waits for the new VM to boot and obtain an IP, then returns `{ ok, name, source, ip }`; pass `wait: false` to return immediately. Delete with `local_delete_vm` when done.
 - `local_show_vm` `{ name }` - get a VM's IP address.
-- `local_ssh_access` `{ name }` - install a temporary SSH key into a running VM (waiting for a pending IP if needed); returns `{ ip, port, user, private_key_path, command }`.
+- `local_ssh_access` `{ name, ssh_public_key_base64 }` - install the caller's public key into a running VM; returns `{ ip, port, user }`. Requires `ssh_public_key_base64`; if omitted, returns `{ error, ssh_key_instructions }`.
 - `local_delete_vm` `{ name }` - delete one specific VM.
 
 VM/template names that start with `-` are rejected so a name can never be reinterpreted as a CLI flag.
