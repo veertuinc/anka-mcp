@@ -63,7 +63,7 @@ describe("ControllerClient", () => {
       versions: [{ number: 0, tag: "v1" }, { number: 1, tag: "vanilla+port-forward-22" }]
     });
 
-    const id = await client.startVm({ vmid: "tmpl-1", startupScript, addSshPortForward: true });
+    const id = await client.startVm({ templateId: "tmpl-1", startupScript, addSshPortForward: true });
     expect(id).toBe("inst-1");
     expect(mock.startPayloads[0]).toMatchObject({
       vmid: "tmpl-1",

@@ -81,7 +81,7 @@ The agent generates an SSH keypair locally and passes a base64-encoded OpenSSH p
 
 ```mermaid
 flowchart LR
-  agent["AI agent"] -->|"controller_request_vm {vmid, ssh_public_key_base64}"| mcp["anka-mcp"]
+  agent["AI agent"] -->|"controller_request_vm {templateId, ssh_public_key_base64}"| mcp["anka-mcp"]
   mcp -->|"POST /api/v1/vm"| ctl["Controller API"]
   mcp -->|"poll GET /api/v1/vm?id="| ctl
   mcp -->|"{host, port, username}"| agent
@@ -221,8 +221,8 @@ Back up `anka-mcp.db` for disaster recovery; it is created automatically on firs
 
 ### Controller
 
-- `controller_list_templates` - list registry templates (`id`, `name`, `arch`) to find a `vmid`.
-- `controller_request_vm` `{ vmid, ssh_public_key_base64, tag?, name?, externalId?, addSshPortForward? }` - start one VM and install the caller's SSH public key via `startup_script`. Requires `ssh_public_key_base64` (base64 of a single-line OpenSSH public key). If omitted, returns `{ error, ssh_key_instructions }` without starting a VM. When SSH-ready: `{ instance_id, status: "ready", ssh: { host, port, username } }` — use this directly; do not call `controller_get_vm`. While pulling: `{ status: "pending", ssh: null, message }` — poll `controller_get_vm` every 30 seconds.
+- `controller_list_templates` - list registry templates (`id`, `name`, `arch`) to find a `templateId`.
+- `controller_request_vm` `{ templateId, ssh_public_key_base64, tag?, name?, externalId?, addSshPortForward? }` - start one VM and install the caller's SSH public key via `startup_script`. Requires `ssh_public_key_base64` (base64 of a single-line OpenSSH public key). If omitted, returns `{ error, ssh_key_instructions }` without starting a VM. When SSH-ready: `{ instance_id, status: "ready", ssh: { host, port, username } }` — use this directly; do not call `controller_get_vm`. While pulling: `{ status: "pending", ssh: null, message }` — poll `controller_get_vm` every 30 seconds.
 - `controller_get_vm` `{ instance_id }` - poll an owned instance only when `controller_request_vm` returned `status: "pending"`. When SSH-ready, returns `{ status: "ready", ssh: { host, port, username } }`.
 - `controller_terminate_vm` `{ instance_id }` - terminate an instance (must be owned by the caller's token). Returns `{ instance_id, terminated: true, ssh_key_cleanup }`; run the cleanup command to remove the agent keypair.
 

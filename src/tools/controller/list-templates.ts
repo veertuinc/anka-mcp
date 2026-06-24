@@ -8,8 +8,8 @@ export const controllerListTemplatesTool = defineTool({
     title: "List controller templates",
     description:
       "List the VM templates available in the Anka Build Cloud registry, including " +
-      "version tags for each template. Use this to find the template `vmid` " +
-      "(and optionally a tag) to pass to controller_request_vm.",
+      "version tags for each template. Use this to find the template `templateId` " +
+      "(from the `id` field) and optionally a tag to pass to controller_request_vm.",
     inputSchema: {},
     annotations: { title: "List controller templates", readOnlyHint: true, openWorldHint: true }
   },

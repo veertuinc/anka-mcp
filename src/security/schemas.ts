@@ -8,7 +8,7 @@ export const boundedName = z
   .max(128)
   .regex(/^[^-]/, 'must not start with "-"');
 
-/** Controller vmid, instance_id, tag, and similar opaque ids. */
+/** Controller templateId, instance_id, tag, and similar opaque ids. */
 export const uuidLike = z
   .string()
   .trim()

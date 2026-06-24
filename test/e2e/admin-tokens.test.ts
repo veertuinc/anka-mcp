@@ -60,7 +60,7 @@ describe("admin token API", () => {
     const client = await connect(baseUrl, created.body.token);
 
     const started = await client.call("controller_request_vm", {
-      vmid: "tmpl-1",
+      templateId: "tmpl-1",
       ssh_public_key_base64: TEST_PUBLIC_KEY_BASE64
     });
     expect(started.isError).toBe(false);
@@ -81,7 +81,7 @@ describe("admin token API", () => {
     const { admin, baseUrl, mock } = await startAdminServer({ MCP_REVOKE_CLEANUP: "off" });
     const created = await admin.createToken();
     const client = await connect(baseUrl, created.body.token);
-    await client.call("controller_request_vm", { vmid: "tmpl-1" });
+    await client.call("controller_request_vm", { templateId: "tmpl-1" });
 
     const revoked = await admin.revokeToken(created.body.id);
     expect(revoked.body.cleanup).toEqual({ terminated: [], failed: [] });

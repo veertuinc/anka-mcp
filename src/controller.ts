@@ -59,7 +59,7 @@ export interface SshEndpoint {
 }
 
 export interface StartVmRequest {
-  vmid: string;
+  templateId: string;
   tag?: string;
   name?: string;
   externalId?: string;
@@ -143,7 +143,7 @@ export class ControllerClient {
     return body;
   }
 
-  /** List registry templates with version tags so a caller can find vmid/tag pairs. */
+  /** List registry templates with version tags so a caller can find templateId/tag pairs. */
   async listTemplates(): Promise<RegistryTemplate[]> {
     const body = await this.request<RegistryTemplate[]>("GET", "/api/v1/registry/vm");
     const templates = body ?? [];
@@ -157,7 +157,7 @@ export class ControllerClient {
 
   /** Start a single VM instance from a template; returns the new instance id. */
   async startVm(req: StartVmRequest): Promise<string> {
-    const payload: Record<string, unknown> = { vmid: req.vmid, count: 1 };
+    const payload: Record<string, unknown> = { vmid: req.templateId, count: 1 };
     if (req.tag) payload.tag = req.tag;
     if (req.name) payload.name = req.name;
     if (req.externalId) payload.external_id = req.externalId;

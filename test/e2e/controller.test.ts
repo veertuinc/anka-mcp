@@ -56,7 +56,7 @@ describe("controller backend e2e", () => {
 
   it("returns SSH key instructions when ssh_public_key_base64 is omitted", async () => {
     const client = await startWith({ readyAfter: 1 });
-    const res = await client.call("controller_request_vm", { vmid: "tmpl-1" });
+    const res = await client.call("controller_request_vm", { templateId: "tmpl-1" });
     expect(res.isError).toBe(true);
     expect(res.data.error).toMatch(/ssh_public_key_base64 is required/i);
     expect(res.data.ssh_key_instructions).toMatch(/ssh-keygen -t ed25519/i);
@@ -66,7 +66,7 @@ describe("controller backend e2e", () => {
   it("requests a VM and returns SSH endpoint details", async () => {
     const client = await startWith({ readyAfter: 2 });
     const res = await client.call("controller_request_vm", {
-      vmid: "tmpl-1",
+      templateId: "tmpl-1",
       ssh_public_key_base64: TEST_PUBLIC_KEY_BASE64
     });
     expect(res.isError).toBe(false);
@@ -91,7 +91,7 @@ describe("controller backend e2e", () => {
   it("reports a terminal state as an error", async () => {
     const client = await startWith({ failWithState: "Error" });
     const res = await client.call("controller_request_vm", {
-      vmid: "tmpl-1",
+      templateId: "tmpl-1",
       ssh_public_key_base64: TEST_PUBLIC_KEY_BASE64
     });
     expect(res.isError).toBe(true);
@@ -101,7 +101,7 @@ describe("controller backend e2e", () => {
   it("returns pending status while a template is pulling", async () => {
     const client = await startWith({ readyAfter: 100, pendingState: "Pulling" });
     const res = await client.call("controller_request_vm", {
-      vmid: "tmpl-1",
+      templateId: "tmpl-1",
       ssh_public_key_base64: TEST_PUBLIC_KEY_BASE64
     });
     expect(res.isError).toBe(false);
@@ -116,7 +116,7 @@ describe("controller backend e2e", () => {
   it("returns pending guidance from controller_get_vm while pulling", async () => {
     const client = await startWith({ fixedState: "Pulling" });
     await client.call("controller_request_vm", {
-      vmid: "tmpl-1",
+      templateId: "tmpl-1",
       ssh_public_key_base64: TEST_PUBLIC_KEY_BASE64
     });
     const res = await client.call("controller_get_vm", { instance_id: "inst-1" });
@@ -129,7 +129,7 @@ describe("controller backend e2e", () => {
   it("returns SSH endpoint from controller_get_vm after pending provisioning", async () => {
     const client = await startWith({ readyAfter: 2, pendingState: "Pulling" });
     const request = await client.call("controller_request_vm", {
-      vmid: "tmpl-1",
+      templateId: "tmpl-1",
       ssh_public_key_base64: TEST_PUBLIC_KEY_BASE64
     });
     expect(request.data.status).toBe("pending");
@@ -144,7 +144,7 @@ describe("controller backend e2e", () => {
   it("terminates an instance owned by the caller", async () => {
     const client = await startWith({ readyAfter: 1 });
     await client.call("controller_request_vm", {
-      vmid: "tmpl-1",
+      templateId: "tmpl-1",
       ssh_public_key_base64: TEST_PUBLIC_KEY_BASE64
     });
     const res = await client.call("controller_terminate_vm", { instance_id: "inst-1" });

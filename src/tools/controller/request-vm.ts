@@ -34,7 +34,7 @@ export const controllerRequestVmTool = defineTool({
       "Do not SSH until status is ready; wait ~20s after ready before connecting. " +
       "If the template is still being pulled, returns status pending; then poll controller_get_vm every 30 seconds.",
     inputSchema: {
-      vmid: uuidLike.describe("UUID of the template to start (from controller_list_templates)."),
+      templateId: uuidLike.describe("UUID of the template to start (from controller_list_templates)."),
       ssh_public_key_base64: z
         .string()
         .trim()
@@ -63,7 +63,7 @@ export const controllerRequestVmTool = defineTool({
     annotations: { title: "Request a VM from the controller", openWorldHint: true }
   },
   handler: async ({
-    vmid,
+    templateId,
     ssh_public_key_base64,
     tag,
     name,
@@ -97,7 +97,7 @@ export const controllerRequestVmTool = defineTool({
       const startupScript = encodeStartupScript(buildAuthorizedKeysStartupScript(publicKeyLine));
 
       const instanceId = await controller.startVm({
-        vmid,
+        templateId,
         tag,
         name,
         externalId: buildControllerExternalId(externalId),

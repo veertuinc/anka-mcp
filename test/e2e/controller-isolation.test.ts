@@ -38,7 +38,7 @@ describe("controller VM isolation per token", () => {
     const clientB = await connect(srv.baseUrl, tokenB.body.token);
 
     const started = await clientA.call("controller_request_vm", {
-      vmid: "tmpl-1",
+      templateId: "tmpl-1",
       ssh_public_key_base64: TEST_PUBLIC_KEY_BASE64
     });
     expect(started.isError).toBe(false);
