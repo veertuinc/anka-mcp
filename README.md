@@ -98,8 +98,13 @@ ssh-keygen -t ed25519 -N "" -C "anka-vm" -f ./anka_vm_key
 base64 -w0 < ./anka_vm_key.pub
 # macOS:
 base64 < ./anka_vm_key.pub | tr -d '\n'
-# Pass the output as ssh_public_key_base64, then once ready:
-ssh -i ./anka_vm_key -p <port> -o IdentitiesOnly=yes -o StrictHostKeyChecking=no anka@<host>
+# Pass the output as ssh_public_key_base64, then poll until status is ready:
+#   controller_get_vm every 30s while status is pending — do not SSH yet
+# Wait ~20s after status becomes ready (startup_script installs your key at boot), then:
+SSH_AUTH_SOCK= ssh -i ./anka_vm_key -p <port> \
+  -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+  <username>@<host>
+# If auth fails, wait 20s and retry. IdentitiesOnly + SSH_AUTH_SOCK= avoids "Too many authentication failures".
 ```
 
 ## Use-case 2: Local laptop
@@ -170,6 +175,8 @@ anka-mcp: 2026-06-22T16:52:15.059Z [127.0.0.1 (Cursor/1.x)] tool local_list_temp
 | `ANKA_VM_SSH_GUEST_PORT` | `22` | Guest port that maps to SSH (matched in port forwarding). |
 
 The MCP server never generates or stores SSH private keys. The agent creates a keypair locally, passes the base64-encoded public key line to `controller_request_vm` or `local_ssh_access`, and connects with the matching private key once the endpoint is ready.
+
+**Important:** The controller may expose an SSH port before `startup_script` finishes installing your public key. Poll until `status` is `"ready"`, wait ~20 seconds, then SSH with `-o IdentitiesOnly=yes` and `SSH_AUTH_SOCK=` to avoid early auth failures.
 
 For production, terminate TLS in front of this server so the bearer token is not sent in cleartext.
 

@@ -19,6 +19,7 @@ describe("controller pending states", () => {
     expect(controllerStatusPollMessage("Pulling")).toMatch(/being pulled/i);
     expect(controllerStatusPollMessage("Pulling")).toMatch(/every 30 seconds/i);
     expect(controllerStatusPollMessage("Pulling")).toMatch(/controller_get_vm/i);
+    expect(controllerStatusPollMessage("Pulling")).toMatch(/Do not attempt SSH/i);
   });
 
   it("returns pending fields for a pulling instance", () => {
@@ -65,7 +66,8 @@ describe("controller pending states", () => {
       instance_state: "Started",
       vm_status: "running",
       status: "ready",
-      ssh: { host: "10.0.0.5", port: 10005, username: "anka" }
+      ssh: { host: "10.0.0.5", port: 10005, username: "anka" },
+      ssh_connect_hint: expect.stringMatching(/Wait ~20 seconds/i)
     });
   });
 });

@@ -5,6 +5,7 @@ import {
   isSshReady,
   type Instance
 } from "../../controller.js";
+import { SSH_CONNECT_GUIDANCE } from "../../ssh-key.js";
 
 /** Instance states that mean the VM will never become ready. */
 export const FAILED_CONTROLLER_STATES = new Set([
@@ -43,6 +44,7 @@ export function controllerVmStatusFields(instanceId: string, instance: Instance)
 
   if (isSshReady(instance)) {
     fields.status = "ready";
+    fields.ssh_connect_hint = SSH_CONNECT_GUIDANCE;
   } else if (!isFailedControllerState(instance.instance_state)) {
     fields.status = "pending";
     fields.message = controllerStatusPollMessage(instance.instance_state);

@@ -67,6 +67,7 @@ describe("controller backend e2e", () => {
       port: 10005,
       username: "anka"
     });
+    expect(res.data.ssh_connect_hint).toMatch(/Wait ~20 seconds/i);
     expect(res.data.ssh).not.toHaveProperty("private_key");
     expect(mock!.startPayloads[0].startup_script).toBeTruthy();
     expect(mock!.startPayloads[0].startup_script_condition).toBe(1);
@@ -126,6 +127,7 @@ describe("controller backend e2e", () => {
     expect(ready.isError).toBe(false);
     expect(ready.data.status).toBe("ready");
     expect(ready.data.ssh).toEqual({ host: "10.0.0.5", port: 10005, username: "anka" });
+    expect(ready.data.ssh_connect_hint).toMatch(/IdentitiesOnly/i);
   });
 
   it("terminates an instance owned by the caller", async () => {

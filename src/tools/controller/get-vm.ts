@@ -11,9 +11,10 @@ export const controllerGetVmTool = defineTool({
     title: "Get controller VM status",
     description:
       "Get the current state of a controller VM instance. When SSH-ready, returns " +
-      "host, forwarded port, and username. Connect with the private key matching " +
-      "the ssh_public_key_base64 you passed to controller_request_vm. While " +
-      "provisioning, returns status pending with guidance to poll every 30 seconds.",
+      "host, forwarded port, username, and ssh_connect_hint. Do not SSH until status " +
+      "is ready; wait ~20s after ready before connecting (startup_script installs " +
+      "your public key at boot). While provisioning, returns status pending with " +
+      "guidance to poll every 30 seconds.",
     inputSchema: {
       instance_id: uuidLike.describe("The instance id returned by controller_request_vm.")
     },

@@ -209,18 +209,16 @@ export function shouldReturnPendingFromRequest(state: string | undefined): boole
 /** Agent-facing guidance for polling controller_get_vm during provisioning. */
 export function controllerStatusPollMessage(state: string | undefined): string {
   const label = state ?? "unknown";
+  const pollHint =
+    `Call controller_get_vm with this instance_id every ${CONTROLLER_STATUS_POLL_INTERVAL_SECONDS} seconds ` +
+    `until status is ready and ssh is populated. Do not attempt SSH while status is pending.`;
   if (state === "Pulling") {
     return (
       `Template image is being pulled on the target node (instance_state: ${label}). ` +
-      `Call controller_get_vm with this instance_id every ${CONTROLLER_STATUS_POLL_INTERVAL_SECONDS} seconds ` +
-      `until instance_state is Started and ssh is available.`
+      pollHint
     );
   }
-  return (
-    `Instance provisioning is still in progress (instance_state: ${label}). ` +
-    `Call controller_get_vm with this instance_id every ${CONTROLLER_STATUS_POLL_INTERVAL_SECONDS} seconds ` +
-    `until instance_state is Started and ssh is available.`
-  );
+  return `Instance provisioning is still in progress (instance_state: ${label}). ${pollHint}`;
 }
 
 /** True once the controller reports a started VM with a forwarded SSH port. */
