@@ -27,6 +27,7 @@ import { createServer } from "../server.js";
 import { initTokenStore, getTokenStore } from "../tokens/store.js";
 import { enabledTools } from "../tools/index.js";
 import { registerAdminRoutes } from "./admin.js";
+import { registerStatusRoute } from "./status.js";
 
 const SESSION_HEADER = "mcp-session-id";
 
@@ -196,6 +197,7 @@ export async function startHttp(): Promise<void> {
   const limit = rateLimitMiddleware(rateLimiter);
 
   registerAdminRoutes(app, limit);
+  registerStatusRoute(app);
 
   const sessions = new Map<string, McpSession>();
 

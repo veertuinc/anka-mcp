@@ -69,7 +69,7 @@ curl -s -X POST "http://localhost:9111/admin/tokens" \
   -d '{"label":"team-a"}'
 ```
 
-The endpoint is served at `http://<host>:<port>/mcp`. For local dev without auth (never expose beyond localhost):
+The MCP endpoint is served at `http://<host>:<port>/mcp`. An unauthenticated status endpoint at `http://<host>:<port>/status` returns `{ "version": "<semver>" }` for health checks. For local dev without auth (never expose beyond localhost):
 
 ```bash
 MCP_ALLOW_NO_AUTH=1 npm run dev
@@ -208,7 +208,7 @@ When `MCP_ADMIN_TOKEN` is set, the server exposes an admin API to create and rev
 | `GET`    | `/admin/tokens`      | admin bearer            | List tokens (no secrets)         |
 | `DELETE` | `/admin/tokens/:id`  | admin bearer            | Revoke token and clean up VMs    |
 
-Admin and MCP tokens are separate: the admin token never works on `/mcp`, and client tokens never work on `/admin/*`.
+Admin and MCP tokens are separate: the admin token never works on `/mcp`, and client tokens never work on `/admin/*`. The `/status` endpoint does not require authentication.
 
 **Controller VM isolation:** each client token can only `controller_get_vm` / `controller_terminate_vm` instances it created via `controller_request_vm`. Revoking a token blocks MCP access immediately and, by default (`MCP_REVOKE_CLEANUP=on`), best-effort terminates all controller instances owned by that token. The revoke response includes `cleanup.terminated` and `cleanup.failed` arrays.
 
@@ -291,6 +291,7 @@ src/
     local/                 # local_* tools (+ vms.ts: list/count/guard/name schema)
   transports/
     http.ts                # streamable HTTP transport + auth/origin middleware
+    status.ts              # unauthenticated GET /status (version)
     admin.ts               # /admin/tokens routes
 test/
   fixtures/fake-anka.mjs   # fake anka CLI for hermetic local-backend tests
