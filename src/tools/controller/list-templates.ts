@@ -7,9 +7,9 @@ export const controllerListTemplatesTool = defineTool({
   config: {
     title: "List controller templates",
     description:
-      "List the VM templates available in the Anka Build Cloud registry. Use this " +
-      "to find the template `vmid` (and optionally a tag) to pass to " +
-      "controller_request_vm.",
+      "List the VM templates available in the Anka Build Cloud registry, including " +
+      "version tags for each template. Use this to find the template `vmid` " +
+      "(and optionally a tag) to pass to controller_request_vm.",
     inputSchema: {},
     annotations: { title: "List controller templates", readOnlyHint: true, openWorldHint: true }
   },
@@ -17,7 +17,17 @@ export const controllerListTemplatesTool = defineTool({
     runControllerTool(async () => {
       const templates = await controller.listTemplates();
       return jsonResult({
-        templates: templates.map((t) => ({ id: t.id, name: t.name, arch: t.arch }))
+        templates: templates.map((t) => ({
+          id: t.id,
+          name: t.name,
+          arch: t.arch,
+          tags: (t.versions ?? [])
+            .filter((version) => version.tag)
+            .map((version) => ({
+              tag: version.tag,
+              description: version.description ?? ""
+            }))
+        }))
       });
     })
 });

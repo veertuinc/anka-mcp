@@ -41,7 +41,17 @@ describe("controller backend e2e", () => {
   it("lists templates with a trimmed shape", async () => {
     const client = await startWith({ readyAfter: 1 });
     const res = await client.call("controller_list_templates", {});
-    expect(res.data.templates).toEqual([{ id: "tmpl-1", name: "14.5-arm64", arch: "arm64" }]);
+    expect(res.data.templates).toEqual([
+      {
+        id: "tmpl-1",
+        name: "14.5-arm64",
+        arch: "arm64",
+        tags: [
+          { tag: "v1", description: "Initial release" },
+          { tag: "vanilla+port-forward-22", description: "SSH port forward on guest port 22" }
+        ]
+      }
+    ]);
   });
 
   it("returns SSH key instructions when ssh_public_key_base64 is omitted", async () => {

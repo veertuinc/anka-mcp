@@ -61,6 +61,24 @@ export async function startMockController(options: MockControllerOptions = {}): 
     };
 
     if (url.pathname === "/api/v1/registry/vm" && req.method === "GET") {
+      const templateId = url.searchParams.get("id");
+      if (templateId) {
+        return send({
+          status: "OK",
+          body: {
+            id: templateId,
+            name: "14.5-arm64",
+            arch: "arm64",
+            size: 123,
+            last_pull: 1,
+            last_push: 2,
+            versions: [
+              { number: 0, tag: "v1", description: "Initial release" },
+              { number: 1, tag: "vanilla+port-forward-22", description: "SSH port forward on guest port 22" }
+            ]
+          }
+        });
+      }
       return send({
         status: "OK",
         body: [{ id: "tmpl-1", name: "14.5-arm64", arch: "arm64", size: 123, last_pull: 1, last_push: 2 }]

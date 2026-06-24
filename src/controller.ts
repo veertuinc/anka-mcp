@@ -37,10 +37,18 @@ export interface Instance {
   [key: string]: unknown;
 }
 
+export interface RegistryTemplateVersion {
+  tag: string;
+  number?: number;
+  description?: string;
+  [key: string]: unknown;
+}
+
 export interface RegistryTemplate {
   id: string;
   name: string;
   arch?: string;
+  versions?: RegistryTemplateVersion[];
   [key: string]: unknown;
 }
 
@@ -123,10 +131,28 @@ export class ControllerClient {
     return (envelope ? envelope.body : undefined) as T;
   }
 
-  /** List registry templates so a caller can find the vmid/tag to start from. */
+  /** Fetch a single registry template, including version tags. */
+  async getTemplate(id: string): Promise<RegistryTemplate> {
+    const body = await this.request<RegistryTemplate>(
+      "GET",
+      `/api/v1/registry/vm?id=${encodeURIComponent(id)}`
+    );
+    if (!body) {
+      throw new ControllerError(`Template ${id} not found`);
+    }
+    return body;
+  }
+
+  /** List registry templates with version tags so a caller can find vmid/tag pairs. */
   async listTemplates(): Promise<RegistryTemplate[]> {
     const body = await this.request<RegistryTemplate[]>("GET", "/api/v1/registry/vm");
-    return body ?? [];
+    const templates = body ?? [];
+    return Promise.all(
+      templates.map(async (template) => {
+        const detail = await this.getTemplate(template.id);
+        return { ...template, versions: detail.versions };
+      })
+    );
   }
 
   /** Start a single VM instance from a template; returns the new instance id. */

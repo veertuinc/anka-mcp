@@ -57,7 +57,11 @@ describe("ControllerClient", () => {
     const startupScript = encodeStartupScript(buildAuthorizedKeysStartupScript(publicKey));
 
     const templates = await client.listTemplates();
-    expect(templates[0]).toMatchObject({ id: "tmpl-1", name: "14.5-arm64" });
+    expect(templates[0]).toMatchObject({
+      id: "tmpl-1",
+      name: "14.5-arm64",
+      versions: [{ number: 0, tag: "v1" }, { number: 1, tag: "vanilla+port-forward-22" }]
+    });
 
     const id = await client.startVm({ vmid: "tmpl-1", startupScript, addSshPortForward: true });
     expect(id).toBe("inst-1");
