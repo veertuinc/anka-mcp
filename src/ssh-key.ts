@@ -1,16 +1,27 @@
+/** Default path for the agent-generated SSH keypair (under /tmp, ephemeral). */
+export const ANKA_MCP_SSH_KEY_PATH = "/tmp/anka_mcp_ssh_key";
+
+/** Reminder to delete the agent keypair after SSH is no longer needed. */
+export const SSH_KEY_CLEANUP_INSTRUCTIONS =
+  "Delete the agent SSH keypair so the next run does not hang on ssh-keygen overwrite:\n" +
+  `  rm -f ${ANKA_MCP_SSH_KEY_PATH} ${ANKA_MCP_SSH_KEY_PATH}.pub`;
+
 /** Instructions returned when the caller omits ssh_public_key_base64. */
 export const SSH_PUBLIC_KEY_INSTRUCTIONS =
-  "Create an ed25519 keypair on the agent machine:\n" +
-  '  ssh-keygen -t ed25519 -N "" -C "anka-vm" -f ./anka_vm_key\n' +
+  "Create an ed25519 keypair on the agent machine (remove any prior key first — ssh-keygen prompts interactively if the path exists):\n" +
+  `  rm -f ${ANKA_MCP_SSH_KEY_PATH} ${ANKA_MCP_SSH_KEY_PATH}.pub\n` +
+  `  ssh-keygen -t ed25519 -N "" -C "anka-mcp" -f ${ANKA_MCP_SSH_KEY_PATH} -q\n` +
   "Base64-encode the single-line public key file:\n" +
-  "  Linux: base64 -w0 < ./anka_vm_key.pub\n" +
-  "  macOS: base64 < ./anka_vm_key.pub | tr -d '\\n'\n" +
+  `  Linux: base64 -w0 < ${ANKA_MCP_SSH_KEY_PATH}.pub\n` +
+  `  macOS: base64 < ${ANKA_MCP_SSH_KEY_PATH}.pub | tr -d '\\n'\n` +
   "Pass the result as ssh_public_key_base64 to controller_request_vm.\n" +
   "Poll controller_get_vm every 30 seconds until status is ready and ssh is populated.\n" +
   "Wait ~20 seconds after status becomes ready before the first SSH attempt (startup_script installs the key at boot).\n" +
   "Connect with IdentitiesOnly=yes and disable ssh-agent to avoid authentication failures:\n" +
-  "  SSH_AUTH_SOCK= ssh -i ./anka_vm_key -p <port> -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null <username>@<host>\n" +
-  "If auth fails, wait 20 seconds and retry before giving up.";
+  `  SSH_AUTH_SOCK= ssh -i ${ANKA_MCP_SSH_KEY_PATH} -p <port> -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null <username>@<host>\n` +
+  "If auth fails, wait 20 seconds and retry before giving up.\n" +
+  "When finished or on session termination:\n" +
+  SSH_KEY_CLEANUP_INSTRUCTIONS;
 
 /** Shown when a controller VM reports SSH endpoint details but the agent should not connect yet. */
 export const SSH_CONNECT_GUIDANCE =

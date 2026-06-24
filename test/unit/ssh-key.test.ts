@@ -1,8 +1,10 @@
 import { describe, it, expect } from "vitest";
 import {
+  ANKA_MCP_SSH_KEY_PATH,
   buildAuthorizedKeysStartupScript,
   decodeSshPublicKeyBase64,
   encodeStartupScript,
+  SSH_KEY_CLEANUP_INSTRUCTIONS,
   SSH_PUBLIC_KEY_INSTRUCTIONS
 } from "../../src/ssh-key.js";
 
@@ -26,10 +28,19 @@ describe("decodeSshPublicKeyBase64", () => {
   });
 });
 
+describe("SSH_KEY_CLEANUP_INSTRUCTIONS", () => {
+  it("documents how to remove the agent keypair", () => {
+    expect(SSH_KEY_CLEANUP_INSTRUCTIONS).toMatch(new RegExp(`rm -f ${ANKA_MCP_SSH_KEY_PATH}`));
+    expect(SSH_KEY_CLEANUP_INSTRUCTIONS).toMatch(/ssh-keygen overwrite/i);
+  });
+});
+
 describe("SSH_PUBLIC_KEY_INSTRUCTIONS", () => {
   it("documents key generation and how to pass ssh_public_key_base64", () => {
     expect(SSH_PUBLIC_KEY_INSTRUCTIONS).toMatch(/ssh-keygen -t ed25519/i);
     expect(SSH_PUBLIC_KEY_INSTRUCTIONS).toMatch(/ssh_public_key_base64/i);
+    expect(SSH_PUBLIC_KEY_INSTRUCTIONS).toMatch(new RegExp(`rm -f ${ANKA_MCP_SSH_KEY_PATH}`));
+    expect(SSH_PUBLIC_KEY_INSTRUCTIONS).toMatch(/session termination/i);
   });
 });
 

@@ -1,4 +1,5 @@
 import { controller } from "../../controller.js";
+import { SSH_KEY_CLEANUP_INSTRUCTIONS } from "../../ssh-key.js";
 import { uuidLike } from "../../security/schemas.js";
 import {
   releaseControllerInstance,
@@ -30,6 +31,10 @@ export const controllerTerminateVmTool = defineTool({
       }
       await controller.terminateVm(instance_id);
       releaseControllerInstance(instance_id);
-      return jsonResult({ instance_id, terminated: true });
+      return jsonResult({
+        instance_id,
+        terminated: true,
+        ssh_key_cleanup: SSH_KEY_CLEANUP_INSTRUCTIONS
+      });
     })
 });

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { startMockController, type MockController } from "../helpers/controllerMock.js";
 import { TEST_PUBLIC_KEY_BASE64 } from "../helpers/ssh-fixtures.js";
+import { SSH_KEY_CLEANUP_INSTRUCTIONS } from "../../src/ssh-key.js";
 import {
   adminClient,
   connect,
@@ -52,6 +53,10 @@ describe("controller VM isolation per token", () => {
     expect(terminateDenied.data.error).toMatch(/not owned/i);
 
     const terminateOk = await clientA.call("controller_terminate_vm", { instance_id: "inst-1" });
-    expect(terminateOk.data).toEqual({ instance_id: "inst-1", terminated: true });
+    expect(terminateOk.data).toEqual({
+      instance_id: "inst-1",
+      terminated: true,
+      ssh_key_cleanup: SSH_KEY_CLEANUP_INSTRUCTIONS
+    });
   });
 });

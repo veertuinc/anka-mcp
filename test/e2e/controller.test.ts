@@ -2,6 +2,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import { startServer, connect, type RunningServer } from "../helpers/mcp.js";
 import { startMockController, type MockController } from "../helpers/controllerMock.js";
 import { TEST_PUBLIC_KEY_BASE64, TEST_PUBLIC_KEY_LINE } from "../helpers/ssh-fixtures.js";
+import { SSH_KEY_CLEANUP_INSTRUCTIONS } from "../../src/ssh-key.js";
 
 let srv: RunningServer | undefined;
 let mock: MockController | undefined;
@@ -137,6 +138,10 @@ describe("controller backend e2e", () => {
       ssh_public_key_base64: TEST_PUBLIC_KEY_BASE64
     });
     const res = await client.call("controller_terminate_vm", { instance_id: "inst-1" });
-    expect(res.data).toEqual({ instance_id: "inst-1", terminated: true });
+    expect(res.data).toEqual({
+      instance_id: "inst-1",
+      terminated: true,
+      ssh_key_cleanup: SSH_KEY_CLEANUP_INSTRUCTIONS
+    });
   });
 });
