@@ -100,8 +100,9 @@ ssh-keygen -t ed25519 -N "" -C "anka-mcp" -f "$ANKA_MCP_SSH_KEY" -q
 base64 -w0 < "$ANKA_MCP_SSH_KEY.pub"
 # macOS:
 base64 < "$ANKA_MCP_SSH_KEY.pub" | tr -d '\n'
-# Pass the output as ssh_public_key_base64, then poll until status is ready:
-#   controller_get_vm every 30s while status is pending — do not SSH yet
+# Pass the output as ssh_public_key_base64.
+# If controller_request_vm returns status ready with ssh, use it — do not call controller_get_vm.
+# Only if status is pending, poll controller_get_vm every 30s until ready — do not SSH yet
 # Wait ~20s after status becomes ready (startup_script installs your key at boot), then:
 SSH_AUTH_SOCK= ssh -i "$ANKA_MCP_SSH_KEY" -p <port> \
   -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
@@ -180,7 +181,7 @@ anka-mcp: 2026-06-22T16:52:15.059Z [127.0.0.1 (Cursor/1.x)] tool local_list_temp
 
 The MCP server never generates or stores SSH private keys. The agent creates a keypair locally, passes the base64-encoded public key line to `controller_request_vm` or `local_ssh_access`, and connects with the matching private key once the endpoint is ready.
 
-**Important:** The controller may expose an SSH port before `startup_script` finishes installing your public key. Poll until `status` is `"ready"`, wait ~20 seconds, then SSH with `-o IdentitiesOnly=yes` and `SSH_AUTH_SOCK=` to avoid early auth failures.
+**Important:** The controller may expose an SSH port before `startup_script` finishes installing your public key. If `controller_request_vm` returns `status: "ready"`, use that response — do not call `controller_get_vm`. Poll `controller_get_vm` only when request returned `status: "pending"`. Wait ~20 seconds after status is `"ready"`, then SSH with `-o IdentitiesOnly=yes` and `SSH_AUTH_SOCK=` to avoid early auth failures.
 
 For production, terminate TLS in front of this server so the bearer token is not sent in cleartext.
 
@@ -221,8 +222,8 @@ Back up `anka-mcp.db` for disaster recovery; it is created automatically on firs
 ### Controller
 
 - `controller_list_templates` - list registry templates (`id`, `name`, `arch`) to find a `vmid`.
-- `controller_request_vm` `{ vmid, ssh_public_key_base64, tag?, name?, externalId?, addSshPortForward? }` - start one VM and install the caller's SSH public key via `startup_script`. Requires `ssh_public_key_base64` (base64 of a single-line OpenSSH public key). If omitted, returns `{ error, ssh_key_instructions }` without starting a VM. When SSH-ready: `{ instance_id, status: "ready", ssh: { host, port, username } }`. While pulling: `{ status: "pending", ssh: null, message }` — poll `controller_get_vm` every 30 seconds.
-- `controller_get_vm` `{ instance_id }` - current state for an owned instance. When SSH-ready, returns `{ status: "ready", ssh: { host, port, username } }`.
+- `controller_request_vm` `{ vmid, ssh_public_key_base64, tag?, name?, externalId?, addSshPortForward? }` - start one VM and install the caller's SSH public key via `startup_script`. Requires `ssh_public_key_base64` (base64 of a single-line OpenSSH public key). If omitted, returns `{ error, ssh_key_instructions }` without starting a VM. When SSH-ready: `{ instance_id, status: "ready", ssh: { host, port, username } }` — use this directly; do not call `controller_get_vm`. While pulling: `{ status: "pending", ssh: null, message }` — poll `controller_get_vm` every 30 seconds.
+- `controller_get_vm` `{ instance_id }` - poll an owned instance only when `controller_request_vm` returned `status: "pending"`. When SSH-ready, returns `{ status: "ready", ssh: { host, port, username } }`.
 - `controller_terminate_vm` `{ instance_id }` - terminate an instance (must be owned by the caller's token). Returns `{ instance_id, terminated: true, ssh_key_cleanup }`; run the cleanup command to remove the agent keypair.
 
 ### Local

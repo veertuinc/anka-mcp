@@ -237,7 +237,8 @@ export function controllerStatusPollMessage(state: string | undefined): string {
   const label = state ?? "unknown";
   const pollHint =
     `Call controller_get_vm with this instance_id every ${CONTROLLER_STATUS_POLL_INTERVAL_SECONDS} seconds ` +
-    `until status is ready and ssh is populated. Do not attempt SSH while status is pending.`;
+    `until status is ready and ssh is populated (only needed because request_vm returned pending — ` +
+    `do not call get_vm if request_vm already returned ready). Do not attempt SSH while status is pending.`;
   if (state === "Pulling") {
     return (
       `Template image is being pulled on the target node (instance_state: ${label}). ` +

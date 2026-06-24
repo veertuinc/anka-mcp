@@ -29,9 +29,10 @@ export const controllerRequestVmTool = defineTool({
       "Start one VM instance from a template on the Anka Build Cloud Controller. " +
       "Requires ssh_public_key_base64: a base64-encoded OpenSSH public key line " +
       "(ssh-ed25519 AAAA...). The key is installed on the VM via startup_script. " +
-      "When SSH-ready, returns host, forwarded port, username, and ssh_connect_hint. " +
+      "When SSH-ready, returns host, forwarded port, username, and ssh_connect_hint — " +
+      "use that response directly; do not call controller_get_vm. " +
       "Do not SSH until status is ready; wait ~20s after ready before connecting. " +
-      "If the template is still being pulled, returns status pending; poll controller_get_vm every 30 seconds.",
+      "If the template is still being pulled, returns status pending; then poll controller_get_vm every 30 seconds.",
     inputSchema: {
       vmid: uuidLike.describe("UUID of the template to start (from controller_list_templates)."),
       ssh_public_key_base64: z

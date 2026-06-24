@@ -12,6 +12,7 @@ MCP tool results are fed straight into an agent's context, so every field costs 
   - `local_show_vm` -> `{ ip }` only.
   - `controller_list_templates` -> `{ id, name, arch, tags: [{ tag, description }] }` per template.
   - `controller_request_vm` / `controller_get_vm` -> when SSH-ready: `{ instance_id, status: "ready", ssh: { host, port, username }, ssh_connect_hint }`; while provisioning: `{ status: "pending", ssh: null, message }`; if `ssh_public_key_base64` is omitted: `{ error, ssh_key_instructions }`; do not echo the full `vminfo`.
+- **Controller VM workflow:** if `controller_request_vm` returns `status: "ready"` (e.g. `instance_state: "Started"`, `vm_status: "running"`, and `ssh` populated), use that response directly — **do not** call `controller_get_vm`. Poll `controller_get_vm` every 30 seconds only when `controller_request_vm` returns `status: "pending"` (template still pulling or SSH not yet available).
   - `controller_terminate_vm` -> `{ instance_id, terminated: true, ssh_key_cleanup }`; run the cleanup command so the next session does not hang on ssh-keygen overwrite.
   - `local_ssh_access` -> `{ ok, ip, port, user }` after installing the caller's public key.
 - The agent generates and keeps the SSH **private** key locally. Pass only a base64-encoded **public** key line as `ssh_public_key_base64`. Never expect the MCP server to return private key material.

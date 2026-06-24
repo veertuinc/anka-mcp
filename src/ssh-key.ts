@@ -15,7 +15,8 @@ export const SSH_PUBLIC_KEY_INSTRUCTIONS =
   `  Linux: base64 -w0 < ${ANKA_MCP_SSH_KEY_PATH}.pub\n` +
   `  macOS: base64 < ${ANKA_MCP_SSH_KEY_PATH}.pub | tr -d '\\n'\n` +
   "Pass the result as ssh_public_key_base64 to controller_request_vm.\n" +
-  "Poll controller_get_vm every 30 seconds until status is ready and ssh is populated.\n" +
+  "If request_vm returns status ready with ssh, use it directly — do not call controller_get_vm.\n" +
+  "Only if request_vm returns status pending, poll controller_get_vm every 30 seconds until status is ready and ssh is populated.\n" +
   "Wait ~20 seconds after status becomes ready before the first SSH attempt (startup_script installs the key at boot).\n" +
   "Connect with IdentitiesOnly=yes and disable ssh-agent to avoid authentication failures:\n" +
   `  SSH_AUTH_SOCK= ssh -i ${ANKA_MCP_SSH_KEY_PATH} -p <port> -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null <username>@<host>\n` +
