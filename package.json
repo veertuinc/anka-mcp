@@ -1,6 +1,6 @@
 {
   "name": "@veertu/anka-mcp",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "An MCP server that handles agentic requests for Anka macOS VMs either from the Anka Build Cloud Controller or locally",
   "type": "module",
   "bin": {
