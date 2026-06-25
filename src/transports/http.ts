@@ -55,7 +55,7 @@ function originGuard(req: Request, res: Response, next: NextFunction): void {
   // Non-browser MCP clients omit Origin; only enforce when one is present.
   if (origin && !config.allowedOrigins.includes(origin)) {
     logLimitReached({
-      limit: "MCP_ALLOWED_ORIGINS",
+      limit: "ANKA_MCP_ALLOWED_ORIGINS",
       configured: config.allowedOrigins.join(","),
       route: req.originalUrl,
       actor: limitActorFromRequest(req),
@@ -143,8 +143,10 @@ async function withRequestLogging<T>(
 function assertAuthConfigured(): void {
   if (!isMcpAuthConfigured()) {
     throw new Error(
-      "Refusing to start without authentication. Set MCP_AUTH_TOKEN or MCP_ADMIN_TOKEN, " +
-        "or set MCP_ALLOW_NO_AUTH=1 to run unauthenticated (local dev only)."
+      "Refusing to start without authentication. Set ANKA_MCP_ADMIN_TOKEN " +
+        "(then create client tokens via /admin/tokens), or set ANKA_MCP_ALLOW_NO_AUTH=1 for local dev only.\n\n" +
+        "Generate an admin token:\n" +
+        '  export ANKA_MCP_ADMIN_TOKEN="$(openssl rand -hex 32)"'
     );
   }
 }
@@ -166,7 +168,7 @@ function sweepIdleSessions(sessions: Map<string, McpSession>): void {
     sessions.delete(id);
     void session.transport.close?.();
     logLimitReached({
-      limit: "MCP_SESSION_IDLE_MS",
+      limit: "ANKA_MCP_SESSION_IDLE_MS",
       configured: String(config.sessionIdleMs),
       route: "/mcp",
       actor: session.actor,
@@ -182,9 +184,6 @@ function sweepIdleSessions(sessions: Map<string, McpSession>): void {
  */
 export async function startHttp(): Promise<void> {
   initTokenStore(config.dbPath);
-  if (config.authToken) {
-    getTokenStore().ensureLegacyCredential();
-  }
 
   assertAuthConfigured();
   assertBackendEnabled();
@@ -231,7 +230,7 @@ export async function startHttp(): Promise<void> {
 
         if (sessions.size >= config.maxSessions) {
           logLimitReached({
-            limit: "MCP_MAX_SESSIONS",
+            limit: "ANKA_MCP_MAX_SESSIONS",
             configured: String(config.maxSessions),
             route: "/mcp",
             actor: limitActorFromContext(),
@@ -322,7 +321,7 @@ export async function startHttp(): Promise<void> {
       (err as { type: string }).type === "entity.too.large"
     ) {
       logLimitReached({
-        limit: "MCP_MAX_BODY_BYTES",
+        limit: "ANKA_MCP_MAX_BODY_BYTES",
         configured: String(config.maxBodyBytes),
         route: req.originalUrl,
         actor: limitActorFromRequest(req),

@@ -70,7 +70,7 @@ describe("logLimitReached", () => {
 
     try {
       logLimitReached({
-        limit: "MCP_RATE_LIMIT_RPM",
+        limit: "ANKA_MCP_RATE_LIMIT_RPM",
         configured: "120",
         route: "/mcp",
         actor: {
@@ -86,7 +86,7 @@ describe("logLimitReached", () => {
     }
 
     const line = lines.join("");
-    expect(line).toContain("LIMIT REACHED MCP_RATE_LIMIT_RPM=120");
+    expect(line).toContain("LIMIT REACHED ANKA_MCP_RATE_LIMIT_RPM=120");
     expect(line).toContain("source=10.0.0.5 (Cursor/1.0)");
     expect(line).toContain("credential_id=cred-abc");
     expect(line).toContain("credential_label=team-a");

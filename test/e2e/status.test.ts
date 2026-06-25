@@ -16,7 +16,7 @@ describe("status endpoint", () => {
     const srv = await startServer({
       ANKA_LOCAL: "off",
       ANKA_CONTROLLER_URL: DUMMY_CONTROLLER,
-      MCP_AUTH_TOKEN: "secret"
+      ANKA_MCP_ADMIN_TOKEN: "secret"
     });
     try {
       const res = await fetch(`${srv.baseUrl}/status`);

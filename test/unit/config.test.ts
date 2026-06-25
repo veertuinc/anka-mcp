@@ -47,17 +47,15 @@ describe("loadConfig", () => {
     expect(loadConfig({ ...base, ANKA_LOCAL_MAX_VMS: "-3" }).localMaxVms).toBe(2);
   });
 
-  it("parses auth, admin, and database settings", () => {
+  it("parses admin and database settings", () => {
     const c = loadConfig({
       ...base,
-      MCP_AUTH_TOKEN: "  secret  ",
-      MCP_ADMIN_TOKEN: " admin ",
-      MCP_DB_PATH: " /tmp/test.db ",
-      MCP_REVOKE_CLEANUP: "off",
-      MCP_ALLOW_NO_AUTH: "1",
-      MCP_ALLOWED_ORIGINS: "https://a.com, https://b.com"
+      ANKA_MCP_ADMIN_TOKEN: " admin ",
+      ANKA_MCP_DB_PATH: " /tmp/test.db ",
+      ANKA_MCP_REVOKE_CLEANUP: "off",
+      ANKA_MCP_ALLOW_NO_AUTH: "1",
+      ANKA_MCP_ALLOWED_ORIGINS: "https://a.com, https://b.com"
     });
-    expect(c.authToken).toBe("secret");
     expect(c.adminToken).toBe("admin");
     expect(c.dbPath).toBe("/tmp/test.db");
     expect(c.revokeCleanupEnabled).toBe(false);
@@ -67,7 +65,7 @@ describe("loadConfig", () => {
 
   it("enables logging by default and allows disabling it", () => {
     expect(loadConfig(base).logEnabled).toBe(true);
-    expect(loadConfig({ ...base, MCP_LOG: "off" }).logEnabled).toBe(false);
+    expect(loadConfig({ ...base, ANKA_MCP_LOG: "off" }).logEnabled).toBe(false);
   });
 
   it("honors overridden VM SSH defaults and guest port", () => {

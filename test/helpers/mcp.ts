@@ -12,6 +12,8 @@ const FAKE_ANKA = resolve(HERE, "../fixtures/fake-anka.mjs");
 
 export { FAKE_ANKA };
 
+export const TEST_ADMIN_TOKEN = "admin-secret";
+
 export function tempDbPath(): string {
   const dir = mkdtempSync(join(tmpdir(), "anka-mcp-e2e-"));
   return join(dir, "test.db");
@@ -47,14 +49,14 @@ export interface RunningServer {
  */
 export async function startServer(env: Record<string, string> = {}): Promise<RunningServer> {
   const port = await getFreePort();
-  const autoDb = !env.MCP_DB_PATH;
-  const dbPath = env.MCP_DB_PATH ?? tempDbPath();
+  const autoDb = !env.ANKA_MCP_DB_PATH;
+  const dbPath = env.ANKA_MCP_DB_PATH ?? tempDbPath();
   const child: ChildProcess = spawn(process.execPath, ["--import", "tsx", SERVER_ENTRY], {
     env: {
       ...process.env,
-      MCP_HTTP_PORT: String(port),
-      MCP_HTTP_HOST: "127.0.0.1",
-      MCP_DB_PATH: dbPath,
+      ANKA_MCP_HTTP_PORT: String(port),
+      ANKA_MCP_HTTP_HOST: "127.0.0.1",
+      ANKA_MCP_DB_PATH: dbPath,
       ...env
     },
     stdio: ["ignore", "ignore", "pipe"]
@@ -228,4 +230,16 @@ export function adminClient(baseUrl: string, adminToken: string): AdminClient {
       return { status: res.status, body: await res.json() };
     }
   };
+}
+
+/** Create a client MCP bearer token via the admin API. */
+export async function createClientToken(
+  baseUrl: string,
+  adminToken: string = TEST_ADMIN_TOKEN
+): Promise<string> {
+  const created = await adminClient(baseUrl, adminToken).createToken("test");
+  if (created.status !== 201 || typeof created.body.token !== "string") {
+    throw new Error(`failed to create client token: ${created.status} ${JSON.stringify(created.body)}`);
+  }
+  return created.body.token;
 }

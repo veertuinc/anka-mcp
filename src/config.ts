@@ -6,8 +6,6 @@ export interface AnkaMcpConfig {
   httpPort: number;
   /** Host/interface the HTTP server binds to. */
   httpHost: string;
-  /** Bearer token clients must present. Empty only when auth is explicitly disabled. */
-  authToken: string;
   /** Admin bearer token for /admin/* routes. Empty disables the admin API. */
   adminToken: string;
   /** SQLite database path for client tokens and instance ownership. */
@@ -141,23 +139,22 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AnkaMcpConfig 
   const defaultLocalMode = controllerEnabled ? "off" : "auto";
 
   return {
-    httpPort: parsePositiveIntEnv(env.MCP_HTTP_PORT, 9111),
-    httpHost: env.MCP_HTTP_HOST?.trim() || "127.0.0.1",
-    authToken: env.MCP_AUTH_TOKEN?.trim() || "",
-    adminToken: env.MCP_ADMIN_TOKEN?.trim() || "",
-    dbPath: env.MCP_DB_PATH?.trim() || "./anka-mcp.db",
+    httpPort: parsePositiveIntEnv(env.ANKA_MCP_HTTP_PORT, 9111),
+    httpHost: env.ANKA_MCP_HTTP_HOST?.trim() || "127.0.0.1",
+    adminToken: env.ANKA_MCP_ADMIN_TOKEN?.trim() || "",
+    dbPath: env.ANKA_MCP_DB_PATH?.trim() || "./anka-mcp.db",
     revokeCleanupEnabled: !["0", "false", "no", "off"].includes(
-      env.MCP_REVOKE_CLEANUP?.trim().toLowerCase() ?? ""
+      env.ANKA_MCP_REVOKE_CLEANUP?.trim().toLowerCase() ?? ""
     ),
-    allowNoAuth: parseBoolEnv(env.MCP_ALLOW_NO_AUTH),
-    allowedOrigins: parseListEnv(env.MCP_ALLOWED_ORIGINS),
-    logEnabled: !["0", "false", "no", "off"].includes(env.MCP_LOG?.trim().toLowerCase() ?? ""),
-    auditLogPath: env.MCP_AUDIT_LOG?.trim() || "",
-    maxBodyBytes: parsePositiveIntEnv(env.MCP_MAX_BODY_BYTES, 1_048_576),
-    rateLimitRpm: parseNonNegativeIntEnv(env.MCP_RATE_LIMIT_RPM, 120),
-    sessionIdleMs: parsePositiveIntEnv(env.MCP_SESSION_IDLE_MS, 3_600_000),
-    maxSessions: parsePositiveIntEnv(env.MCP_MAX_SESSIONS, 50),
-    maxResponseChars: parsePositiveIntEnv(env.MCP_MAX_RESPONSE_CHARS, 32_768),
+    allowNoAuth: parseBoolEnv(env.ANKA_MCP_ALLOW_NO_AUTH),
+    allowedOrigins: parseListEnv(env.ANKA_MCP_ALLOWED_ORIGINS),
+    logEnabled: !["0", "false", "no", "off"].includes(env.ANKA_MCP_LOG?.trim().toLowerCase() ?? ""),
+    auditLogPath: env.ANKA_MCP_AUDIT_LOG?.trim() || "",
+    maxBodyBytes: parsePositiveIntEnv(env.ANKA_MCP_MAX_BODY_BYTES, 1_048_576),
+    rateLimitRpm: parseNonNegativeIntEnv(env.ANKA_MCP_RATE_LIMIT_RPM, 120),
+    sessionIdleMs: parsePositiveIntEnv(env.ANKA_MCP_SESSION_IDLE_MS, 3_600_000),
+    maxSessions: parsePositiveIntEnv(env.ANKA_MCP_MAX_SESSIONS, 50),
+    maxResponseChars: parsePositiveIntEnv(env.ANKA_MCP_MAX_RESPONSE_CHARS, 32_768),
 
     localEnabled: resolveLocalEnabled(env.ANKA_LOCAL, ankaBin, defaultLocalMode),
     ankaBin,

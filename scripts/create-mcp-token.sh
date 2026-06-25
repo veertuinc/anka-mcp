@@ -1,25 +1,25 @@
 #!/usr/bin/env bash
 # Create a new MCP client token via the anka-mcp admin API.
 #
-# Requires MCP_ADMIN_TOKEN in the environment (same value the server uses).
+# Requires ANKA_MCP_ADMIN_TOKEN in the environment (same value the server uses).
 #
 # Usage:
-#   MCP_ADMIN_TOKEN=... ./scripts/create-mcp-token.sh [label]
+#   ANKA_MCP_ADMIN_TOKEN=... ./scripts/create-mcp-token.sh [label]
 #
 # Optional env:
 #   ANKA_MCP_URL   Base URL (default: http://127.0.0.1:9111)
-#   MCP_HTTP_HOST  Host when ANKA_MCP_URL is unset (default: 127.0.0.1)
-#   MCP_HTTP_PORT  Port when ANKA_MCP_URL is unset (default: 9111)
+#   ANKA_MCP_HTTP_HOST  Host when ANKA_MCP_URL is unset (default: 127.0.0.1)
+#   ANKA_MCP_HTTP_PORT  Port when ANKA_MCP_URL is unset (default: 9111)
 
 set -euo pipefail
 
 label="${1:-}"
-host="${MCP_HTTP_HOST:-127.0.0.1}"
-port="${MCP_HTTP_PORT:-9111}"
+host="${ANKA_MCP_HTTP_HOST:-127.0.0.1}"
+port="${ANKA_MCP_HTTP_PORT:-9111}"
 base_url="${ANKA_MCP_URL:-http://${host}:${port}}"
 
-if [[ -z "${MCP_ADMIN_TOKEN:-}" ]]; then
-  echo "error: MCP_ADMIN_TOKEN is not set" >&2
+if [[ -z "${ANKA_MCP_ADMIN_TOKEN:-}" ]]; then
+  echo "error: ANKA_MCP_ADMIN_TOKEN is not set" >&2
   exit 1
 fi
 
@@ -29,7 +29,7 @@ request_body="$(
 
 response="$(
   curl -sS -w $'\n%{http_code}' -X POST "${base_url}/admin/tokens" \
-    -H "Authorization: Bearer ${MCP_ADMIN_TOKEN}" \
+    -H "Authorization: Bearer ${ANKA_MCP_ADMIN_TOKEN}" \
     -H "Content-Type: application/json" \
     -d "$request_body"
 )"

@@ -87,7 +87,7 @@ export function limitActorFromContext(): LimitActor {
 
 /**
  * Log that a configured limit was hit. Format:
- * `LIMIT REACHED MCP_RATE_LIMIT_RPM=120 by source=… credential_id=… route=/mcp …`
+ * `LIMIT REACHED ANKA_MCP_RATE_LIMIT_RPM=120 by source=… credential_id=… route=/mcp …`
  */
 export function logLimitReached(opts: {
   limit: string;

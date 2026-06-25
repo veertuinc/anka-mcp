@@ -1,6 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { config } from "./config.js";
-import { getTokenStore, LEGACY_CREDENTIAL_ID } from "./tokens/store.js";
+import { getTokenStore } from "./tokens/store.js";
 
 export interface ResolvedMcpCredential {
   credentialId: string;
@@ -23,10 +23,6 @@ export function resolveMcpCredential(bearerToken: string): ResolvedMcpCredential
 
   if (!bearerToken) return null;
 
-  if (config.authToken && safeEqual(bearerToken, config.authToken)) {
-    return { credentialId: LEGACY_CREDENTIAL_ID, credentialLabel: "legacy" };
-  }
-
   const validated = getTokenStore().validateToken(bearerToken);
   if (validated) {
     return { credentialId: validated.id, credentialLabel: validated.label || undefined };
@@ -38,7 +34,6 @@ export function resolveMcpCredential(bearerToken: string): ResolvedMcpCredential
 /** Whether the server has any configured MCP client authentication path. */
 export function isMcpAuthConfigured(): boolean {
   if (config.allowNoAuth) return true;
-  if (config.authToken) return true;
   if (config.adminToken) return true;
   try {
     return getTokenStore().hasActiveTokens();

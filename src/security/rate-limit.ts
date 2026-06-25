@@ -42,7 +42,7 @@ export class SlidingWindowRateLimiter {
   }
 }
 
-/** Express middleware that enforces per-IP RPM when `MCP_RATE_LIMIT_RPM` > 0. */
+/** Express middleware that enforces per-IP RPM when `ANKA_MCP_RATE_LIMIT_RPM` > 0. */
 export function rateLimitMiddleware(limiter: SlidingWindowRateLimiter) {
   return (req: Request, res: Response, next: NextFunction): void => {
     if (config.rateLimitRpm <= 0) {
@@ -56,7 +56,7 @@ export function rateLimitMiddleware(limiter: SlidingWindowRateLimiter) {
       return;
     }
     logLimitReached({
-      limit: "MCP_RATE_LIMIT_RPM",
+      limit: "ANKA_MCP_RATE_LIMIT_RPM",
       configured: String(config.rateLimitRpm),
       route: req.originalUrl,
       actor: limitActorFromRequest(req),

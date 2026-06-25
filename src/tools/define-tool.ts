@@ -59,7 +59,7 @@ export function jsonResult(value: unknown, isError = false): CallToolResult {
   const originalLength = text.length;
   if (text.length > config.maxResponseChars) {
     logLimitReached({
-      limit: "MCP_MAX_RESPONSE_CHARS",
+      limit: "ANKA_MCP_MAX_RESPONSE_CHARS",
       configured: String(config.maxResponseChars),
       actor: limitActorFromContext(),
       detail: `response_chars=${originalLength}`

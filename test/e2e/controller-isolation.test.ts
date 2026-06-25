@@ -24,7 +24,7 @@ describe("controller VM isolation per token", () => {
     mock = await startMockController({ readyAfter: 1 });
     srv = await startServer({
       ANKA_LOCAL: "off",
-      MCP_ADMIN_TOKEN: "admin-secret",
+      ANKA_MCP_ADMIN_TOKEN: "admin-secret",
       ANKA_CONTROLLER_URL: mock.url,
       ANKA_CONTROLLER_POLL_INTERVAL_MS: "50",
       ANKA_CONTROLLER_START_TIMEOUT_MS: "5000"

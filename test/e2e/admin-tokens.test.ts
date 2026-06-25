@@ -23,7 +23,7 @@ async function startAdminServer(extraEnv: Record<string, string> = {}) {
   mock = await startMockController({ readyAfter: 1 });
   srv = await startServer({
     ANKA_LOCAL: "off",
-    MCP_ADMIN_TOKEN: "admin-secret",
+    ANKA_MCP_ADMIN_TOKEN: "admin-secret",
     ANKA_CONTROLLER_URL: mock.url,
     ANKA_CONTROLLER_POLL_INTERVAL_MS: "50",
     ANKA_CONTROLLER_START_TIMEOUT_MS: "5000",
@@ -77,8 +77,8 @@ describe("admin token API", () => {
     expect(await rawInitialize(baseUrl, created.body.token)).toBe(401);
   });
 
-  it("skips controller cleanup when MCP_REVOKE_CLEANUP is off", async () => {
-    const { admin, baseUrl, mock } = await startAdminServer({ MCP_REVOKE_CLEANUP: "off" });
+  it("skips controller cleanup when ANKA_MCP_REVOKE_CLEANUP is off", async () => {
+    const { admin, baseUrl, mock } = await startAdminServer({ ANKA_MCP_REVOKE_CLEANUP: "off" });
     const created = await admin.createToken();
     const client = await connect(baseUrl, created.body.token);
     await client.call("controller_request_vm", { templateId: "tmpl-1" });

@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { startServer, connect, type RunningServer } from "../helpers/mcp.js";
+import { startServer, connect, createClientToken, TEST_ADMIN_TOKEN, type RunningServer } from "../helpers/mcp.js";
 import { startMockController, type MockController } from "../helpers/controllerMock.js";
 import { TEST_PUBLIC_KEY_BASE64, TEST_PUBLIC_KEY_LINE } from "../helpers/ssh-fixtures.js";
 import { SSH_KEY_CLEANUP_INSTRUCTIONS } from "../../src/ssh-key.js";
@@ -18,12 +18,13 @@ async function startWith(mockOpts: Parameters<typeof startMockController>[0]) {
   mock = await startMockController(mockOpts);
   srv = await startServer({
     ANKA_LOCAL: "off",
-    MCP_AUTH_TOKEN: "secret",
+    ANKA_MCP_ADMIN_TOKEN: TEST_ADMIN_TOKEN,
     ANKA_CONTROLLER_URL: mock.url,
     ANKA_CONTROLLER_POLL_INTERVAL_MS: "50",
     ANKA_CONTROLLER_START_TIMEOUT_MS: "5000"
   });
-  return connect(srv.baseUrl, "secret");
+  const clientToken = await createClientToken(srv.baseUrl, TEST_ADMIN_TOKEN);
+  return connect(srv.baseUrl, clientToken);
 }
 
 describe("controller backend e2e", () => {

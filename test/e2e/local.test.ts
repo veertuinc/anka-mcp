@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterEach } from "vitest";
 import { chmodSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { startServer, connect, FAKE_ANKA, type RunningServer } from "../helpers/mcp.js";
+import { startServer, connect, createClientToken, TEST_ADMIN_TOKEN, FAKE_ANKA, type RunningServer } from "../helpers/mcp.js";
 import { TEST_PUBLIC_KEY_BASE64 } from "../helpers/ssh-fixtures.js";
 
 const TEST_PUBLIC_KEY_LINE =
@@ -21,13 +21,14 @@ afterEach(() => {
 const baseEnv = (extra: Record<string, string> = {}) => ({
   ANKA_LOCAL: "on",
   ANKA_BIN: FAKE_ANKA,
-  MCP_AUTH_TOKEN: "secret",
+  ANKA_MCP_ADMIN_TOKEN: TEST_ADMIN_TOKEN,
   ...extra
 });
 
 async function start(extra: Record<string, string> = {}) {
   srv = await startServer(baseEnv(extra));
-  return connect(srv.baseUrl, "secret");
+  const clientToken = await createClientToken(srv.baseUrl, TEST_ADMIN_TOKEN);
+  return connect(srv.baseUrl, clientToken);
 }
 
 describe("local backend e2e", () => {

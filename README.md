@@ -47,9 +47,15 @@ anka-mcp
 Set auth and backend env vars before starting (see [Configuration](#configuration)). Example:
 
 ```bash
-export MCP_AUTH_TOKEN="$(openssl rand -hex 32)"
-echo "MCP_AUTH_TOKEN=$MCP_AUTH_TOKEN"
+export ANKA_MCP_ADMIN_TOKEN="$(openssl rand -hex 32)"
+echo "ANKA_MCP_ADMIN_TOKEN=$ANKA_MCP_ADMIN_TOKEN"
 anka-mcp
+
+# Create a client MCP token (plaintext shown once):
+curl -s -X POST "http://localhost:9111/admin/tokens" \
+  -H "Authorization: Bearer $ANKA_MCP_ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"label":"my-client"}'
 ```
 
 ### From source (contributors)
@@ -57,21 +63,21 @@ anka-mcp
 ```bash
 npm install
 npm run build
-export MCP_AUTH_TOKEN="$(openssl rand -hex 32)"
-echo "MCP_AUTH_TOKEN=$MCP_AUTH_TOKEN"
+export ANKA_MCP_ADMIN_TOKEN="$(openssl rand -hex 32)"
+echo "ANKA_MCP_ADMIN_TOKEN=$ANKA_MCP_ADMIN_TOKEN"
 npm start
 ```
 
-For **multi-client** deployments, use the admin API instead of a single shared token:
+For **multi-client** deployments, use the admin API to issue per-client tokens:
 
 ```bash
-export MCP_ADMIN_TOKEN="$(openssl rand -hex 32)"
+export ANKA_MCP_ADMIN_TOKEN="$(openssl rand -hex 32)"
 export ANKA_CONTROLLER_URL="http://your-controller:8090"
 npm start
 
 # Create a per-client MCP token (plaintext shown once):
 curl -s -X POST "http://localhost:9111/admin/tokens" \
-  -H "Authorization: Bearer $MCP_ADMIN_TOKEN" \
+  -H "Authorization: Bearer $ANKA_MCP_ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"label":"team-a"}'
 ```
@@ -79,7 +85,7 @@ curl -s -X POST "http://localhost:9111/admin/tokens" \
 The MCP endpoint is served at `http://<host>:<port>/mcp`. An unauthenticated status endpoint at `http://<host>:<port>/status` returns `{ "version": "<semver>" }` for health checks. For local dev without auth (never expose beyond localhost):
 
 ```bash
-MCP_ALLOW_NO_AUTH=1 npm run dev
+ANKA_MCP_ALLOW_NO_AUTH=1 npm run dev
 ```
 
 ## Use-case 1: Controller fleet
@@ -133,21 +139,20 @@ All configuration is via environment variables.
 
 | Variable              | Default   | Description                                                            |
 | --------------------- | --------- | --------------------------------------------------------------------- |
-| `MCP_HTTP_PORT`       | `9111`    | Port the HTTP server listens on.                                      |
-| `MCP_HTTP_HOST`       | `127.0.0.1` | Interface to bind to. Defaults to localhost; set `0.0.0.0` for remote access behind TLS. |
-| `MCP_AUTH_TOKEN`      | (none)    | Legacy single bearer token for all MCP clients. Still supported.      |
-| `MCP_ADMIN_TOKEN`     | (none)    | Admin bearer token for `/admin/*` routes. Enables token management.   |
-| `MCP_DB_PATH`         | `./anka-mcp.db` | SQLite database for client tokens and instance ownership.       |
-| `MCP_REVOKE_CLEANUP`  | `on`      | When a token is revoked, terminate its controller VMs (set `off` to skip). |
-| `MCP_ALLOW_NO_AUTH`   | `false`   | Set to `1` to run unauthenticated (local dev only).                   |
-| `MCP_ALLOWED_ORIGINS` | (none)    | Comma-separated Origin allow-list for DNS-rebinding protection.       |
-| `MCP_LOG`             | `on`      | Request logging to stderr. Set to `off` (or `0`/`false`/`no`) to disable. |
-| `MCP_AUDIT_LOG`       | (none)    | Optional append-only audit log file (duplicates stderr log lines).    |
-| `MCP_MAX_BODY_BYTES`  | `1048576` | Max JSON request body size (1 MiB).                                   |
-| `MCP_RATE_LIMIT_RPM`  | `120`     | Max requests per client IP per minute (`0` = disabled).               |
-| `MCP_SESSION_IDLE_MS` | `3600000` | Idle MCP session eviction threshold (1 hour).                         |
-| `MCP_MAX_SESSIONS`    | `50`      | Max concurrent MCP sessions.                                          |
-| `MCP_MAX_RESPONSE_CHARS` | `32768` | Max serialized tool response size (32 KiB).                         |
+| `ANKA_MCP_HTTP_PORT`       | `9111`    | Port the HTTP server listens on.                                      |
+| `ANKA_MCP_HTTP_HOST`       | `127.0.0.1` | Interface to bind to. Defaults to localhost; set `0.0.0.0` for remote access behind TLS. |
+| `ANKA_MCP_ADMIN_TOKEN`     | (none)    | Admin bearer token for `/admin/*` routes. Required to start the server. |
+| `ANKA_MCP_DB_PATH`         | `./anka-mcp.db` | SQLite database for client tokens and instance ownership.       |
+| `ANKA_MCP_REVOKE_CLEANUP`  | `on`      | When a token is revoked, terminate its controller VMs (set `off` to skip). |
+| `ANKA_MCP_ALLOW_NO_AUTH`   | `false`   | Set to `1` to run unauthenticated (local dev only).                   |
+| `ANKA_MCP_ALLOWED_ORIGINS` | (none)    | Comma-separated Origin allow-list for DNS-rebinding protection.       |
+| `ANKA_MCP_LOG`             | `on`      | Request logging to stderr. Set to `off` (or `0`/`false`/`no`) to disable. |
+| `ANKA_MCP_AUDIT_LOG`       | (none)    | Optional append-only audit log file (duplicates stderr log lines).    |
+| `ANKA_MCP_MAX_BODY_BYTES`  | `1048576` | Max JSON request body size (1 MiB).                                   |
+| `ANKA_MCP_RATE_LIMIT_RPM`  | `120`     | Max requests per client IP per minute (`0` = disabled).               |
+| `ANKA_MCP_SESSION_IDLE_MS` | `3600000` | Idle MCP session eviction threshold (1 hour).                         |
+| `ANKA_MCP_MAX_SESSIONS`    | `50`      | Max concurrent MCP sessions.                                          |
+| `ANKA_MCP_MAX_RESPONSE_CHARS` | `32768` | Max serialized tool response size (32 KiB).                         |
 
 When logging is enabled, each MCP request is written to stderr with the client source (IP and user-agent), JSON-RPC method, tool name and arguments, tool response (with passwords and private keys redacted), and any underlying `anka` or controller API calls. Example:
 
@@ -198,29 +203,27 @@ See [SECURITY.md](SECURITY.md) for the full operator security guide.
 
 By default the server binds to **localhost only** (`127.0.0.1`). To expose it on a network:
 
-1. Set `MCP_HTTP_HOST=0.0.0.0` (or a specific interface).
+1. Set `ANKA_MCP_HTTP_HOST=0.0.0.0` (or a specific interface).
 2. Terminate **TLS** in a reverse proxy in front of anka-mcp.
 3. Firewall to trusted clients only.
-4. Issue **per-client tokens** via the admin API — avoid sharing `MCP_AUTH_TOKEN`.
-5. Never use `MCP_ALLOW_NO_AUTH` on non-localhost hosts.
+4. Issue **per-client tokens** via the admin API — do not reuse the admin token for MCP clients.
+5. Never use `ANKA_MCP_ALLOW_NO_AUTH` on non-localhost hosts.
 
 The server prints a warning at startup when bound to a non-loopback address.
 
 ### Multi-client tokens and VM isolation
 
-When `MCP_ADMIN_TOKEN` is set, the server exposes an admin API to create and revoke per-client MCP bearer tokens. Tokens are stored in SQLite (`MCP_DB_PATH`); only hashed secrets are persisted.
+When `ANKA_MCP_ADMIN_TOKEN` is set, the server exposes an admin API to create and revoke per-client MCP bearer tokens. Tokens are stored in SQLite (`ANKA_MCP_DB_PATH`); only hashed secrets are persisted.
 
 | Method   | Path                 | Auth                    | Purpose                          |
 | -------- | -------------------- | ----------------------- | -------------------------------- |
-| `POST`   | `/admin/tokens`      | `Bearer MCP_ADMIN_TOKEN` | Create a client token            |
+| `POST`   | `/admin/tokens`      | `Bearer ANKA_MCP_ADMIN_TOKEN` | Create a client token            |
 | `GET`    | `/admin/tokens`      | admin bearer            | List tokens (no secrets)         |
 | `DELETE` | `/admin/tokens/:id`  | admin bearer            | Revoke token and clean up VMs    |
 
 Admin and MCP tokens are separate: the admin token never works on `/mcp`, and client tokens never work on `/admin/*`. The `/status` endpoint does not require authentication.
 
-**Controller VM isolation:** each client token can only `controller_get_vm` / `controller_terminate_vm` instances it created via `controller_request_vm`. Revoking a token blocks MCP access immediately and, by default (`MCP_REVOKE_CLEANUP=on`), best-effort terminates all controller instances owned by that token. The revoke response includes `cleanup.terminated` and `cleanup.failed` arrays.
-
-The legacy `MCP_AUTH_TOKEN` still works as a single shared client identity (`legacy`); all controller VMs created under it share one ownership bucket.
+**Controller VM isolation:** each client token can only `controller_get_vm` / `controller_terminate_vm` instances it created via `controller_request_vm`. Revoking a token blocks MCP access immediately and, by default (`ANKA_MCP_REVOKE_CLEANUP=on`), best-effort terminates all controller instances owned by that token. The revoke response includes `cleanup.terminated` and `cleanup.failed` arrays.
 
 Back up `anka-mcp.db` for disaster recovery; it is created automatically on first start.
 
