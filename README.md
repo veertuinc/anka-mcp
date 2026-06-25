@@ -7,6 +7,13 @@ A [Model Context Protocol](https://modelcontextprotocol.io) (MCP) server for [An
 
 There is intentionally no generic "run any anka command" tool.
 
+---
+
+**[Youtube Demo Video](https://www.youtube.com/watch?v=Toyjov-PG-c)**
+[![https://www.youtube.com/watch?v=Toyjov-PG-c](anka-mcp-demo1.png)](anka-mcp-demo1.png)
+[![https://www.youtube.com/watch?v=Toyjov-PG-c](anka-mcp-demo2.png)](anka-mcp-demo2.png)
+[![https://www.youtube.com/watch?v=Toyjov-PG-c](anka-mcp-demo3.png)](anka-mcp-demo3.png)
+
 ## Backends and when they enable
 
 | Backend    | Enabled when                                              | Tools |
