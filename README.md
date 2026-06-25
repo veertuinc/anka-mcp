@@ -1,5 +1,10 @@
 # anka-mcp
 
+[![npm version](https://img.shields.io/npm/v/@veertu/anka-mcp)](https://www.npmjs.com/package/@veertu/anka-mcp)
+[![CI](https://github.com/veertuinc/anka-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/veertuinc/anka-mcp/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/npm/l/@veertu/anka-mcp)](https://github.com/veertuinc/anka-mcp/blob/main/LICENSE)
+[![Node.js](https://img.shields.io/node/v/@veertu/anka-mcp)](https://nodejs.org/)
+
 A [Model Context Protocol](https://modelcontextprotocol.io) (MCP) server for [Anka](https://veertu.com/) macOS virtualization. It runs as a **streamable HTTP server** with bearer-token auth and exposes two curated, purpose-built tool sets that auto-enable based on configuration:
 
 - **Controller backend** - talks to the [Anka Build Cloud Controller](https://docs.veertu.com/anka/anka-build-cloud/working-with-controller-and-api/) REST API to request a VM from a fleet and hand back SSH connection details. No `anka` CLI is used.
